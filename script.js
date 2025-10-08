@@ -45,18 +45,34 @@ const audioBip = new Audio('bip.mp3');
 const audioPing = new Audio('ping.mp3'); 
 
 
+// Hàm cố gắng mở khóa audio VÀ rung bằng cách phát một âm thanh
+async function unlockAudio() {
+    try {
+        audioBip.volume = 1.0; 
+        audioPing.volume = 1.0; 
+        
+        // Cố gắng phát âm thanh để mở khóa AudioContext
+        await audioBip.play();
+        audioBip.pause(); 
+        audioBip.currentTime = 0;
+        
+        // Kích hoạt rung (thử nghiệm)
+        navigator.vibrate(50); 
+
+        console.log("Audio and Vibration unlocked successfully!");
+        return true;
+    } catch (e) {
+        console.warn("Audio unlock failed, waiting for user interaction.");
+        return false;
+    }
+}
+
+
 // =================================================================
 // 3. LOGIC CHỌN VAI TRÒ & GÁN ĐỘI
 // =================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Thêm listener để mở khóa Audio khi có tương tác đầu tiên trên body
-    document.body.addEventListener('click', function setupAudio() {
-        audioBip.volume = 1.0; 
-        audioPing.volume = 1.0;
-        document.body.removeEventListener('click', setupAudio);
-    });
-
     document.getElementById('role-selection-screen').style.display = 'block';
 
     // Xử lý chọn Giáo viên
@@ -66,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupTeacherLogic();
     };
 
-    // Xử lý chọn Học sinh (Đã sửa lỗi: cho phép chọn đội ngay)
+    // Xử lý chọn Học sinh
     document.querySelectorAll('#student-role-buttons .btn-role').forEach(button => {
         button.onclick = async (e) => {
             const color = e.target.dataset.color;
@@ -92,15 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
             userRole = 'student';
             showScreen('student-screen');
             
-            // GIẢI PHÁP MỚI: CỐ GẮNG MỞ KHÓA AUDIO VỚI TƯƠNG TÁC CHỌN ĐỘI
-            try {
-                audioBip.volume = 1.0; 
-                await audioBip.play();
-                audioBip.pause(); 
-                audioBip.currentTime = 0;
-            } catch (e) {
-                console.warn("Audio not unlocked yet.");
-            }
+            // KHÔNG GỌI unlockAudio() ở đây nữa, mà chờ nút bấm trên màn hình HS
             
             setupStudentLogic(teamInfo);
         };
@@ -330,11 +338,22 @@ function setupStudentLogic(teamInfo) {
     const teamNameDisplay = document.getElementById('team-name-display');
     const buzzerStatus = document.getElementById('buzzer-status');
     const freezeOverlay = document.getElementById('freeze-overlay');
+    const audioUnlockOverlay = document.getElementById('audio-unlock-overlay'); // NEW
+    const unlockAudioButton = document.getElementById('unlock-audio-button');     // NEW
     const playerPath = `players/${studentTeam}`;
 
     teamNameDisplay.textContent = teamInfo.name;
     buzzerButton.style.backgroundColor = teamInfo.code;
     
+    // HIỂN THỊ LỚP PHỦ MỞ KHÓA NGAY KHI VÀO MÀN HÌNH HS
+    audioUnlockOverlay.style.display = 'flex'; 
+
+    // XỬ LÝ NÚT MỞ KHÓA AUDIO
+    unlockAudioButton.onclick = async () => {
+        await unlockAudio();
+        audioUnlockOverlay.style.display = 'none'; // Ẩn lớp phủ sau khi mở khóa
+    };
+
     // Theo dõi trạng thái GV và buộc thoát
     teacherStatusRef.on('value', (snapshot) => {
         if (snapshot.val() === false && userRole === 'student') {
@@ -348,9 +367,9 @@ function setupStudentLogic(teamInfo) {
     gameRef.child('status').on('value', async (snapshot) => {
         const status = snapshot.val();
         
-        // --- 1. TRẠNG THÁI: BẤM! ---
+        // --- 1. TRẠNG THÁI: BẤM! (KHI NÚT BẤM XUẤT HIỆN) ---
         if (status === 'press_allowed') {
-            // Đảm bảo audio có thể phát sau khi mở khóa
+            // GỌI RUNG VÀ ÂM THANH KHI NÚT BẤM XUẤT HIỆN
             audioBip.play(); 
             navigator.vibrate(100); 
             
@@ -376,6 +395,7 @@ function setupStudentLogic(teamInfo) {
         } else if (status === 'waiting') {
             // Mở băng khi lượt mới bắt đầu (Hồi sinh)
             if (isFrozen) {
+                // GỌI RUNG VÀ ÂM THANH KHI ĐƯỢC HỒI SINH/KẾT THÚC LƯỢT
                 audioPing.play();
                 navigator.vibrate([50, 50, 50]); 
                 freezeOverlay.classList.remove('active'); 
