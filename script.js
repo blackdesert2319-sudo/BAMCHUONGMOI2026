@@ -57,7 +57,9 @@ async function unlockAudio() {
         audioBip.currentTime = 0;
         
         // Kích hoạt rung (thử nghiệm)
-        navigator.vibrate(50); 
+        if ('vibrate' in navigator) {
+            navigator.vibrate(50); 
+        }
 
         console.log("Audio and Vibration unlocked successfully!");
         return true;
@@ -108,8 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
             userRole = 'student';
             showScreen('student-screen');
             
-            // KHÔNG GỌI unlockAudio() ở đây nữa, mà chờ nút bấm trên màn hình HS
-            
+            // Chờ nút bấm trên màn hình HS để mở khóa audio
             setupStudentLogic(teamInfo);
         };
     });
@@ -338,8 +339,8 @@ function setupStudentLogic(teamInfo) {
     const teamNameDisplay = document.getElementById('team-name-display');
     const buzzerStatus = document.getElementById('buzzer-status');
     const freezeOverlay = document.getElementById('freeze-overlay');
-    const audioUnlockOverlay = document.getElementById('audio-unlock-overlay'); // NEW
-    const unlockAudioButton = document.getElementById('unlock-audio-button');     // NEW
+    const audioUnlockOverlay = document.getElementById('audio-unlock-overlay'); 
+    const unlockAudioButton = document.getElementById('unlock-audio-button');     
     const playerPath = `players/${studentTeam}`;
 
     teamNameDisplay.textContent = teamInfo.name;
@@ -367,11 +368,21 @@ function setupStudentLogic(teamInfo) {
     gameRef.child('status').on('value', async (snapshot) => {
         const status = snapshot.val();
         
+        // *** LỖI ĐƯỢC SỬA: CHẶN LOGIC GAME NẾU CHƯA MỞ KHÓA AUDIO ***
+        if (audioUnlockOverlay.style.display !== 'none') {
+            buzzerStatus.textContent = 'TRẠNG THÁI: CHỜ MỞ KHÓA AUDIO';
+            buzzerButton.disabled = true;
+            return; // Dừng xử lý logic game nếu chưa mở khóa audio
+        }
+        // ********************************************************
+        
         // --- 1. TRẠNG THÁI: BẤM! (KHI NÚT BẤM XUẤT HIỆN) ---
         if (status === 'press_allowed') {
             // GỌI RUNG VÀ ÂM THANH KHI NÚT BẤM XUẤT HIỆN
             audioBip.play(); 
-            navigator.vibrate(100); 
+            if ('vibrate' in navigator) {
+                navigator.vibrate(100); 
+            }
             
             document.body.classList.add('flashing-bg');
             setTimeout(() => document.body.classList.remove('flashing-bg'), 500);
@@ -397,7 +408,9 @@ function setupStudentLogic(teamInfo) {
             if (isFrozen) {
                 // GỌI RUNG VÀ ÂM THANH KHI ĐƯỢC HỒI SINH/KẾT THÚC LƯỢT
                 audioPing.play();
-                navigator.vibrate([50, 50, 50]); 
+                if ('vibrate' in navigator) {
+                    navigator.vibrate([50, 50, 50]); 
+                }
                 freezeOverlay.classList.remove('active'); 
                 
                 buzzerButton.style.backgroundColor = teamInfo.code;
