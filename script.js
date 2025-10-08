@@ -50,8 +50,9 @@ const audioPing = new Audio('ping.mp3');
 // =================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Thêm listener để mở khóa Audio khi có tương tác đầu tiên trên body
     document.body.addEventListener('click', function setupAudio() {
-        audioBip.volume = 1.0;
+        audioBip.volume = 1.0; 
         audioPing.volume = 1.0;
         document.body.removeEventListener('click', setupAudio);
     });
@@ -65,14 +66,12 @@ document.addEventListener('DOMContentLoaded', () => {
         setupTeacherLogic();
     };
 
-    // Xử lý chọn Học sinh
+    // Xử lý chọn Học sinh (Đã sửa lỗi: cho phép chọn đội ngay)
     document.querySelectorAll('#student-role-buttons .btn-role').forEach(button => {
         button.onclick = async (e) => {
             const color = e.target.dataset.color;
             const teamInfo = TEAM_COLORS[color];
             const playerPath = `players/${color}`;
-
-            // *** FIX: Đã xóa check teacherOnline ở đây để HS có thể chọn đội ***
 
             const snapshot = await db.ref(playerPath).once('value');
             if (snapshot.exists()) {
@@ -92,6 +91,17 @@ document.addEventListener('DOMContentLoaded', () => {
             studentTeam = color;
             userRole = 'student';
             showScreen('student-screen');
+            
+            // GIẢI PHÁP MỚI: CỐ GẮNG MỞ KHÓA AUDIO VỚI TƯƠNG TÁC CHỌN ĐỘI
+            try {
+                audioBip.volume = 1.0; 
+                await audioBip.play();
+                audioBip.pause(); 
+                audioBip.currentTime = 0;
+            } catch (e) {
+                console.warn("Audio not unlocked yet.");
+            }
+            
             setupStudentLogic(teamInfo);
         };
     });
@@ -143,7 +153,7 @@ function exitStudentRole() {
 
 function setupTeacherLogic() {
     const startButton = document.getElementById('start-button');
-    const endRoundButton = document.getElementById('end-round-button'); // Nút KẾT THÚC LƯỢT MỚI
+    const endRoundButton = document.getElementById('end-round-button'); // Nút KẾT THÚC LƯỢT
     const masterResetButton = document.getElementById('master-reset-button'); // Nút RESET TỔNG
     const countdownDisplay = document.getElementById('countdown-display');
     const resultDisplay = document.getElementById('result-display');
@@ -238,7 +248,7 @@ function setupTeacherLogic() {
         endRoundButton.style.display = 'none';
     };
 
-    // *** TÍNH NĂNG MỚI: Xử lý nút RESET TỔNG ***
+    // Xử lý nút RESET TỔNG (KẾT THÚC CUỘC THI)
     masterResetButton.onclick = async () => {
         if (!confirm('BẠN CÓ CHẮC CHẮN MUỐN RESET TỔNG? Điều này sẽ xóa TẤT CẢ dữ liệu người chơi và thẻ phạt.')) {
             return;
@@ -340,6 +350,7 @@ function setupStudentLogic(teamInfo) {
         
         // --- 1. TRẠNG THÁI: BẤM! ---
         if (status === 'press_allowed') {
+            // Đảm bảo audio có thể phát sau khi mở khóa
             audioBip.play(); 
             navigator.vibrate(100); 
             
@@ -396,7 +407,6 @@ function setupStudentLogic(teamInfo) {
             
             // Học sinh tự động reset game_session/status sau 5 giây (đúng theo yêu cầu bạn muốn)
             setTimeout(async () => {
-                // Chỉ reset nếu game status vẫn là 'press_allowed' (để không đè lên reset của GV)
                 const status = (await gameRef.child('status').once('value')).val();
                 if (status === 'press_allowed') {
                     await gameRef.child('status').set('waiting');
