@@ -1,4 +1,6 @@
 // BUZZER NEON PRO - script.js
+console.log('script.js loaded');
+
 const firebaseConfig = {
   apiKey: "AIzaSyCDEa_NKenTTQqSj1CKYJP02Al1VQC29K",
   authDomain: "bamchuong26.firebaseapp.com",
@@ -52,10 +54,12 @@ const teamNameDisplay = document.getElementById('team-name-display');
 const buzzerStatus = document.getElementById('buzzer-status');
 const freezeOverlay = document.getElementById('freeze-overlay');
 
+console.log('role buttons found:', document.querySelectorAll('.btn-role-team').length);
+
 document.getElementById('btn-teacher').onclick = () => { userRole = 'teacher'; showScreen('teacher'); setupTeacher(); };
 document.querySelectorAll('.btn-role-team').forEach(btn => {
   btn.onclick = async (e) => {
-    const color = e.target.dataset.color;
+    const color = e.currentTarget.dataset.color;
     const team = TEAM_COLORS[color];
     if (!team) return;
     const snap = await playersRef.child(color).once('value');
@@ -67,6 +71,7 @@ document.querySelectorAll('.btn-role-team').forEach(btn => {
 });
 
 function showScreen(mode){
+  // ensure role screen is clickable by default
   roleScreen.style.display = (mode==='teacher' || mode==='student') ? 'none' : 'flex';
   teacherScreen.style.display = (mode==='teacher') ? 'block' : 'none';
   studentScreen.style.display = (mode==='student') ? 'block' : 'none';
@@ -120,7 +125,6 @@ function setupTeacher(){
     await gameRef.set({ status: 'waiting' });
     startButton.style.display='inline-block';
     endRoundButton.style.display='none';
-    resultDisplay.textContent = 'CHỜ LỆNH
     resultDisplay.textContent = 'CHỜ LỆNH';
   };
 
@@ -186,7 +190,7 @@ function setupStudent(teamInfo){
     if(s === 'press_allowed'){
       // Khi giáo viên cho phép bấm
       sounds.bip.play().catch(()=>{});
-      if (navigator.vibrate) navigator.vibrate(80); // rung nhẹ thông báo
+      if (navigator.vibrate) navigator.vibrate(80);
       buzzerButton.animate(
         [{ filter: 'brightness(1.6)' }, { filter: 'brightness(1)' }],
         { duration: 700, iterations: 2 }
@@ -234,7 +238,7 @@ function setupStudent(teamInfo){
     }
   });
 
-  // ✅ Khi học sinh BẤM nút
+  // Khi học sinh BẤM nút
   buzzerButton.onclick = async (e) => {
     const statusSnapshot = await gameRef.child('status').once('value');
     const status = statusSnapshot.val();
@@ -242,9 +246,8 @@ function setupStudent(teamInfo){
     if(isFrozen) return;
 
     if(status === 'press_allowed'){
-      // Hợp lệ
       sounds.click.play().catch(()=>{});
-      if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // rung mạnh khi bấm
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
       buzzerButton.style.filter = 'brightness(1.5)';
       setTimeout(()=>buzzerButton.style.filter = 'brightness(1)',300);
       buzzerButton.classList.add('pulse-once');
@@ -257,7 +260,6 @@ function setupStudent(teamInfo){
       buzzerAllowed = false;
       buzzerStatus.textContent = 'ĐÃ BẤM - CHỜ KẾT QUẢ';
 
-      // tự động reset nếu GV chưa nhấn
       setTimeout(async () => {
         const current = (await gameRef.child('status').once('value')).val();
         if(current === 'press_allowed') {
@@ -266,7 +268,6 @@ function setupStudent(teamInfo){
       }, 5000);
 
     } else {
-      // Bấm sớm -> phạt
       localEarlyPressCount++;
       if(localEarlyPressCount === 1){
         buzzerStatus.textContent = '⚠️ CẢNH CÁO - THẺ VÀNG (1)';
