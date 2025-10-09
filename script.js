@@ -1,4 +1,4 @@
-// BUZZER NEON PRO - script.js (phiên bản A - chống spam/auto click có cảnh cáo & loại)
+// BUZZER NEON PRO - script.js (phiên bản A hoàn chỉnh - có hiển thị cảnh cáo & thẻ vàng cho giáo viên)
 const firebaseConfig = {
   apiKey: "AIzaSyCDEa_NKenTTQqSj1CKYJP02Al1VQC29K",
   authDomain: "bamchuong26.firebaseapp.com",
@@ -147,12 +147,15 @@ function setupTeacher(){
     location.reload();
   };
 
-  // Hiển thị danh sách đội & kết quả
-  playersRef.on('value', snap => {
-    const data = snap.val() || {};
+  /* --- HIỂN THỊ DANH SÁCH ĐỘI (ĐÃ CẬP NHẬT THẺ VÀNG & CẢNH CÁO THỜI GIAN THỰC) --- */
+  function updateTeamsDisplay(snapshot) {
+    const data = snapshot.val() || {};
     teamsStatus.innerHTML = '';
+
     const arr = Object.entries(data).map(([k,v])=> ({ key:k, ...v }));
-    const pressed = arr.filter(p=>p.state==='pressed' && p.press_time>0).sort((a,b)=>a.press_time-b.press_time);
+    const pressed = arr
+      .filter(p=>p.state==='pressed' && p.press_time>0)
+      .sort((a,b)=>a.press_time-b.press_time);
 
     if(pressed[0]) resultDisplay.textContent = `🥇 ${pressed[0].team_name} đã bấm trước!`;
     else resultDisplay.textContent = 'Đang chờ bấm...';
@@ -162,8 +165,10 @@ function setupTeacher(){
       box.className='team-box';
       let stateLabel = p.state;
       if (p.state === 'warning') stateLabel = '⚠️ CẢNH CÁO';
-      if (p.state === 'eliminated') stateLabel = '❌ BỊ LOẠI';
-      if (p.state === 'pressed') stateLabel = '✅ ĐÃ BẤM';
+      else if (p.state === 'eliminated') stateLabel = '❌ BỊ LOẠI';
+      else if (p.state === 'pressed') stateLabel = '✅ ĐÃ BẤM';
+      else if (p.state === 'waiting') stateLabel = '⏳ CHỜ';
+
       box.textContent = `${p.team_name}\n${stateLabel}${p.yellow_cards ? (' • Thẻ Vàng: '+p.yellow_cards) : ''}`;
       box.style.background = TEAM_COLORS[p.color]?.code || '#ddd';
       if(pressed[0] && pressed[0].team_name === p.team_name){
@@ -171,6 +176,13 @@ function setupTeacher(){
       }
       teamsStatus.appendChild(box);
     });
+  }
+
+  // Cập nhật tức thời khi có thay đổi ở học sinh
+  playersRef.on('value', updateTeamsDisplay);
+  playersRef.on('child_changed', async () => {
+    const snap = await playersRef.once('value');
+    updateTeamsDisplay(snap);
   });
 
   // Trạng thái game
@@ -189,7 +201,6 @@ function setupStudent(teamInfo){
   buzzerButton.style.setProperty('--team-glow', teamInfo.glow);
   buzzerButton.style.background = teamInfo.code;
 
-  // Khởi tạo
   localEarlyPressCount = 0;
   isFrozen = false;
   buzzerAllowed = false;
@@ -210,7 +221,6 @@ function setupStudent(teamInfo){
     const s = snap.val();
 
     if(s === 'press_allowed'){
-      // Được phép bấm
       sounds.bip.play().catch(()=>{});
       buzzerAllowed = true;
       buzzerButton.classList.remove('disabled','no-pointer');
@@ -219,7 +229,6 @@ function setupStudent(teamInfo){
       buzzerStatus.textContent = 'TRẠNG THÁI: SẴN SÀNG';
     } 
     else if(s === 'waiting'){
-      // Chuẩn bị lượt mới
       buzzerAllowed = false;
       buzzerButton.classList.add('disabled','no-pointer');
       buzzerButton.disabled = true;
@@ -231,10 +240,9 @@ function setupStudent(teamInfo){
       await playersRef.child(studentTeam).update({ state:'waiting' });
     }
     else if(!isNaN(parseInt(s))){ 
-      // Đang đếm ngược
       buzzerAllowed = false;
       buzzerButton.classList.add('disabled');
-      buzzerButton.classList.remove('no-pointer'); // cho phép click để phát hiện spam
+      buzzerButton.classList.remove('no-pointer');
       buzzerButton.disabled = false;
       buzzerButton.textContent = s;
       buzzerStatus.textContent = 'ĐANG ĐẾM NGƯỢC';
@@ -249,7 +257,6 @@ function setupStudent(teamInfo){
     const now = Date.now();
 
     if(status === 'press_allowed'){
-      // Bấm hợp lệ
       sounds.click.play().catch(()=>{});
       await playersRef.child(studentTeam).update({ state:'pressed', press_time: now });
       freezeOverlay.classList.add('active');
@@ -258,10 +265,8 @@ function setupStudent(teamInfo){
       buzzerButton.classList.add('disabled','no-pointer');
       buzzerButton.disabled = true;
     } else {
-      // Bấm sớm (spam / auto click)
       localEarlyPressCount++;
       if(localEarlyPressCount === 1){
-        // Lần đầu: cảnh cáo
         buzzerStatus.textContent = '⚠️ CẢNH CÁO - THẺ VÀNG (1)';
         await playersRef.child(studentTeam).update({
           state: 'warning',
@@ -271,7 +276,6 @@ function setupStudent(teamInfo){
         buzzerButton.classList.add('shake');
         setTimeout(()=>buzzerButton.classList.remove('shake'),400);
       } else if(localEarlyPressCount >= 2){
-        // Lần thứ 2: bị loại
         await playersRef.child(studentTeam).update({
           state: 'eliminated',
           early_press_time: now
