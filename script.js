@@ -1,4 +1,4 @@
-// BUZZER NEON PRO - script.js (bản có âm thanh và rung)
+// BUZZER NEON PRO - script.js (bản có âm thanh & rung, chạy offline)
 const firebaseConfig = {
   apiKey: "AIzaSyCDEa_NKenTTQqSj1CKYJP02Al1VQC29K",
   authDomain: "bamchuong26.firebaseapp.com",
@@ -24,13 +24,17 @@ const TEAM_COLORS = {
   purple: { name: 'Đội Tím', code: '#9b6bff' }
 };
 
-// ==== ÂM THANH ====
-const soundPressReady = new Audio("https://cdn.jsdelivr.net/gh/jwilber/BamChuongAssets@main/neon_bip.mp3"); // “BẤM!” xuất hiện
-const soundClick = new Audio("https://cdn.jsdelivr.net/gh/jwilber/BamChuongAssets@main/button_click.mp3");  // học sinh bấm
+// ==== ÂM THANH OFFLINE ====
+const sounds = {
+  bip: new Audio('neon_ping.mp3'),        // khi “BẤM!” xuất hiện
+  click: new Audio('electric_click.mp3'), // khi học sinh bấm
+  ping: new Audio('energy_pulse.mp3'),    // khi khởi động vòng
+  lock: new Audio('neon_lock.mp3')        // khi bị loại
+};
 
 // Mở quyền phát âm thanh khi người dùng tương tác lần đầu
 document.body.addEventListener("click", () => {
-  [soundPressReady, soundClick].forEach(a => { a.play().catch(()=>{}); a.pause(); a.currentTime=0; });
+  Object.values(sounds).forEach(a => { a.play().catch(()=>{}); a.pause(); a.currentTime = 0; });
 }, { once: true });
 
 let userRole = null;
@@ -50,6 +54,7 @@ const teamNameDisplay = document.getElementById('team-name-display');
 const buzzerStatus = document.getElementById('buzzer-status');
 const freezeOverlay = document.getElementById('freeze-overlay');
 
+// ===== Chọn vai trò =====
 document.getElementById('btn-teacher').onclick = () => { userRole = 'teacher'; showScreen('teacher'); setupTeacher(); };
 document.querySelectorAll('.btn-role-team').forEach(btn=>{
   btn.onclick=async e=>{
@@ -81,8 +86,10 @@ function setupTeacher(){
     snap.forEach(ch=>{updates[ch.key+'/state']='waiting';updates[ch.key+'/press_time']=0;});
     await playersRef.update(updates);
     await gameRef.set({status:'countdown',last_start_time:Date.now()});
+
     const revealAfter=Math.floor(Math.random()*4)+1;
     let step=4,done=0;
+
     (async function runCountdown(){
       while(step>=1){
         await gameRef.child('status').set(step);
@@ -153,18 +160,21 @@ function setupStudent(teamInfo){
 
   gameRef.child('status').on('value',async snap=>{
     const s=snap.val();
+
     if(s==='press_allowed'){
       // 💥 Khi “BẤM!” xuất hiện
       buzzerButton.className='ready';
       buzzerButton.textContent='BẤM!';
       buzzerStatus.textContent='TRẠNG THÁI: SẴN SÀNG';
-      soundPressReady.currentTime=0;
-      soundPressReady.play().catch(()=>{});
-      if(navigator.vibrate) navigator.vibrate([80, 50, 80]); // rung nhẹ 2 nhịp
+      sounds.bip.currentTime=0;
+      sounds.bip.play().catch(()=>{});
+      if(navigator.vibrate) navigator.vibrate([80, 40, 80]); // rung 2 nhịp ngắn
+
     } else if(!isNaN(parseInt(s))){
       buzzerButton.className='countdown disabled';
       buzzerButton.textContent=s;
       buzzerStatus.textContent='ĐANG ĐẾM NGƯỢC';
+
     } else if(s==='waiting'){
       buzzerButton.className='waiting disabled';
       buzzerButton.textContent='CHỜ GIÁO VIÊN';
@@ -173,12 +183,13 @@ function setupStudent(teamInfo){
     }
   });
 
+  // Khi học sinh bấm nút
   buzzerButton.onclick=async()=>{
     const statusSnapshot=await gameRef.child('status').once('value');
     const status=statusSnapshot.val();
     if(status==='press_allowed'){
-      soundClick.currentTime=0;
-      soundClick.play().catch(()=>{});
+      sounds.click.currentTime=0;
+      sounds.click.play().catch(()=>{});
       if(navigator.vibrate) navigator.vibrate(120);
       const now=Date.now();
       await playersRef.child(studentTeam).update({state:'pressed',press_time:now});
