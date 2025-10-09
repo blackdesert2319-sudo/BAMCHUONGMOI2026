@@ -285,12 +285,11 @@ function setupStudent(teamInfo){
 
   // Click handler for buzzer
   buzzerButton.onclick = async (e) => {
-    // if currently not allowed but not frozen => early press
     const statusSnapshot = await gameRef.child('status').once('value');
     const status = statusSnapshot.val();
 
-    // If already frozen for this client, ignore clicks
-    if(isFrozen) return;
+    // If already frozen for this client (do not increment counter or apply logic)
+    if(isFrozen) return; 
 
     if(status === 'press_allowed'){
       // valid press
@@ -300,7 +299,7 @@ function setupStudent(teamInfo){
       const now = Date.now();
       await playersRef.child(studentTeam).update({ state:'pressed', press_time: now });
       freezeOverlay.classList.add('active');
-      isFrozen = true;
+      isFrozen = true; // Khóa vĩnh viễn sau khi bấm hợp lệ
       buzzerAllowed = false;
       buzzerStatus.textContent = 'ĐÃ BẤM - CHỜ KẾT QUẢ';
       // optionally auto reset game status after 5s by one client (teacher can also end)
@@ -315,29 +314,30 @@ function setupStudent(teamInfo){
     // --- BẮT ĐẦU PHẦN CHỈ ÁP DỤNG TRONG THỜI GIAN ĐẾM NGƯỢC ---
     else if (status === 'countdown' || (!isNaN(parseInt(status)) && status !== 'waiting')) {
       // Early press (during countdown numbers or 'countdown' phase) -> penalty logic
-      localEarlyPressCount++;
+      
+      localEarlyPressCount++; 
       
       if(localEarlyPressCount === 1){
         // Lần 1: Cảnh cáo Thẻ Vàng
         buzzerStatus.textContent = '⚠️ CẢNH CÁO - THẺ VÀNG (1)';
-        freezeOverlay.textContent = '⚠️ CẢNH CÁO - THẺ VÀNG (1)'; // Hiển thị cảnh báo trên overlay
+        freezeOverlay.textContent = '⚠️ CẢNH CÁO - THẺ VÀNG (1)'; 
         freezeOverlay.classList.add('active'); 
+        // Cập nhật Firebase
         await playersRef.child(studentTeam).child('yellow_cards').transaction(v => (v || 0) + 1);
         
-        // Khóa nút bấm TẠM THỜI (3 giây) để ngăn spam tiếp ngay lập tức
+        // Hiển thị cảnh báo nhanh (1 giây)
         buzzerButton.classList.add('shake');
         setTimeout(()=>buzzerButton.classList.remove('shake'),400);
 
-        isFrozen = true;
         setTimeout(() => {
-          // Mở khóa sau 3 giây, cho phép bấm lại
-          isFrozen = false;
           freezeOverlay.classList.remove('active');
           buzzerStatus.textContent = 'TRẠNG THÁI: ĐANG ĐẾM (CÓ THẺ VÀNG)';
-        }, 3000); // 3-second temporary lock
+        }, 1000); // 1-second UI flash
         
       } else if(localEarlyPressCount >= 2){
         // Lần 2 trở lên: Bị Loại và Khóa Vĩnh viễn cho lượt này
+        
+        // Cập nhật Firebase
         await playersRef.child(studentTeam).update({ state:'eliminated' });
         
         freezeOverlay.textContent = '❌ BỊ LOẠI! (2 lần phạm quy)';
