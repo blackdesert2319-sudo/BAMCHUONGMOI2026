@@ -1,9 +1,8 @@
-// BUZZER NEON PRO - script.js
-// Giữ nguyên firebase config của bạn
+// BUZZER NEON PRO - script.js (phiên bản A - chống spam/auto click có cảnh cáo & loại)
 const firebaseConfig = {
   apiKey: "AIzaSyCDEa_NKenTTQqSj1CKYJP02Al1VQC29K",
   authDomain: "bamchuong26.firebaseapp.com",
-  databaseURL: "https://bamchuong26-default-rtdb.asia-southeast1-firebasedatabase.app",
+  databaseURL: "https://bamchuong26-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "bamchuong26",
   storageBucket: "bamchuong26.appspot.com",
   messagingSenderId: "1836167181367",
@@ -25,15 +24,15 @@ const TEAM_COLORS = {
   purple: { name: 'Đội Tím', code: '#9b6bff', glow:'#9b6bff' }
 };
 
-// Audio files (đặt cùng thư mục)
+// Âm thanh
 const sounds = {
-  bip: new Audio('neon_ping.mp3'),        // khi BẤM! xuất hiện
-  ping: new Audio('energy_pulse.mp3'),   // khi mở lượt mới
-  click: new Audio('electric_click.mp3'),// khi HS bấm
-  lock: new Audio('neon_lock.mp3')       // khi bị loại
+  bip: new Audio('neon_ping.mp3'),
+  ping: new Audio('energy_pulse.mp3'),
+  click: new Audio('electric_click.mp3'),
+  lock: new Audio('neon_lock.mp3')
 };
 
-// unlock audio context on first user interaction
+// Kích hoạt âm thanh lần đầu
 document.body.addEventListener('click', function unlockAudio() {
   Object.values(sounds).forEach(a => { a.play().catch(()=>{}); a.pause(); a.currentTime = 0; });
   document.body.removeEventListener('click', unlockAudio);
@@ -43,9 +42,9 @@ let userRole = null;
 let studentTeam = null;
 let buzzerAllowed = false;
 let isFrozen = false;
-let localEarlyPressCount = 0; // đếm số lần bấm sớm trong cùng một lượt (local per client)
+let localEarlyPressCount = 0;
 
-// UI refs
+// Tham chiếu UI
 const roleScreen = document.getElementById('role-selection');
 const teacherScreen = document.getElementById('teacher-screen');
 const studentScreen = document.getElementById('student-screen');
@@ -61,14 +60,13 @@ const teamNameDisplay = document.getElementById('team-name-display');
 const buzzerStatus = document.getElementById('buzzer-status');
 const freezeOverlay = document.getElementById('freeze-overlay');
 
-// role buttons
+// Chọn vai trò
 document.getElementById('btn-teacher').onclick = () => { userRole = 'teacher'; showScreen('teacher'); setupTeacher(); };
 document.querySelectorAll('.btn-role-team').forEach(btn => {
   btn.onclick = async (e) => {
     const color = e.target.dataset.color;
     const team = TEAM_COLORS[color];
     if (!team) return;
-    // reserve team in firebase (if exists block)
     const snap = await playersRef.child(color).once('value');
     if (snap.exists()) { alert('Đội đã có người chọn'); return; }
     await playersRef.child(color).set({ team_name: team.name, color, state:'waiting', press_time:0, yellow_cards:0 });
@@ -79,26 +77,22 @@ document.querySelectorAll('.btn-role-team').forEach(btn => {
 
 function showScreen(mode){
   roleScreen.style.display = (mode==='teacher' || mode==='student') ? 'none' : 'flex';
-  if(mode === 'teacher') { teacherScreen.style.display='block'; studentScreen.style.display='none'; }
-  else if(mode === 'student') { teacherScreen.style.display='none'; studentScreen.style.display='block'; }
-  else { teacherScreen.style.display='none'; studentScreen.style.display='none'; roleScreen.style.display='flex'; }
+  teacherScreen.style.display = (mode==='teacher') ? 'block' : 'none';
+  studentScreen.style.display = (mode==='student') ? 'block' : 'none';
 }
 
-/* ---------------- Teacher logic ---------------- */
+/* ================= GIÁO VIÊN ================= */
 function setupTeacher(){
-  // mark teacher online
   teacherStatusRef.set(true);
   teacherStatusRef.onDisconnect().set(false);
-
-  // reset UI
   resultDisplay.textContent = '';
   countdownDisplay.textContent = 'CHỜ LỆNH';
 
-  // start button logic: random countdown 4->1 with each number duration random 0.5-1.5s
+  // Bắt đầu lượt chơi
   startButton.onclick = async () => {
     startButton.disabled = true;
     resultDisplay.textContent = '';
-    // reset all players (hồi sinh: mỗi lượt đều hồi sinh theo yêu cầu A)
+    // Reset tất cả học sinh về trạng thái "waiting"
     const snap = await playersRef.once('value');
     const updates = {};
     snap.forEach(ch => {
@@ -106,27 +100,22 @@ function setupTeacher(){
       updates[ch.key + '/press_time'] = 0;
     });
     await playersRef.update(updates);
-    // set game status to 'countdown'
+
     await gameRef.set({ status: 'countdown', last_start_time: Date.now() });
-    // choose revealAfter: 1..4 meaning after that many numbers show "press_allowed"
     const revealAfter = Math.floor(Math.random()*4)+1;
     let step = 4;
     let doneSteps = 0;
+
     (async function runCountdown(){
       while(step >= 1){
-        // show current number
         await gameRef.child('status').set(step);
-        // wait random 0.5-1.5s
         const delay = 500 + Math.random()*1000;
         await new Promise(r=>setTimeout(r, delay));
         doneSteps++;
-        // if we reach revealAfter -> show press_allowed
         if(doneSteps === revealAfter){
-          // small extra random delay to make feel unpredictable
           const extra = 200 + Math.random()*1200;
           await new Promise(r=>setTimeout(r, extra));
           await gameRef.child('status').set('press_allowed');
-          // play sound for teacher side as well (optional)
           startButton.style.display='none';
           endRoundButton.style.display='inline-block';
           startButton.disabled = false;
@@ -134,7 +123,6 @@ function setupTeacher(){
         }
         step--;
       }
-      // if loop completes without reveal (fallback) -> set press_allowed
       await gameRef.child('status').set('press_allowed');
       startButton.style.display='none';
       endRoundButton.style.display='inline-block';
@@ -142,7 +130,7 @@ function setupTeacher(){
     })();
   };
 
-  // end round
+  // Kết thúc lượt
   endRoundButton.onclick = async () => {
     await gameRef.set({ status: 'waiting' });
     startButton.style.display='inline-block';
@@ -150,7 +138,7 @@ function setupTeacher(){
     resultDisplay.textContent = 'CHỜ LỆNH';
   };
 
-  // master reset
+  // Reset toàn bộ
   masterResetButton.onclick = async () => {
     if(!confirm('Reset toàn bộ dữ liệu?')) return;
     await playersRef.remove();
@@ -159,21 +147,24 @@ function setupTeacher(){
     location.reload();
   };
 
-  // listen players and show status
+  // Hiển thị danh sách đội & kết quả
   playersRef.on('value', snap => {
     const data = snap.val() || {};
     teamsStatus.innerHTML = '';
-    // find pressed earliest
     const arr = Object.entries(data).map(([k,v])=> ({ key:k, ...v }));
     const pressed = arr.filter(p=>p.state==='pressed' && p.press_time>0).sort((a,b)=>a.press_time-b.press_time);
+
     if(pressed[0]) resultDisplay.textContent = `🥇 ${pressed[0].team_name} đã bấm trước!`;
     else resultDisplay.textContent = 'Đang chờ bấm...';
 
-    // display each team
     arr.forEach(p=>{
       const box = document.createElement('div');
       box.className='team-box';
-      box.textContent = `${p.team_name}\n${p.state}${p.yellow_cards? (' • Thẻ Vàng:'+p.yellow_cards): ''}`;
+      let stateLabel = p.state;
+      if (p.state === 'warning') stateLabel = '⚠️ CẢNH CÁO';
+      if (p.state === 'eliminated') stateLabel = '❌ BỊ LOẠI';
+      if (p.state === 'pressed') stateLabel = '✅ ĐÃ BẤM';
+      box.textContent = `${p.team_name}\n${stateLabel}${p.yellow_cards ? (' • Thẻ Vàng: '+p.yellow_cards) : ''}`;
       box.style.background = TEAM_COLORS[p.color]?.code || '#ddd';
       if(pressed[0] && pressed[0].team_name === p.team_name){
         box.style.boxShadow = '0 0 18px 6px gold';
@@ -182,33 +173,30 @@ function setupTeacher(){
     });
   });
 
-  // listen game status
+  // Trạng thái game
   gameRef.child('status').on('value', snap => {
     const s = snap.val();
     if(s === 'press_allowed') countdownDisplay.textContent = 'BẤM!';
     else if(s === 'waiting') countdownDisplay.textContent = 'CHỜ LỆNH';
-    else if(s === 'countdown') countdownDisplay.textContent = 'ĐANG ĐẾM';
+    else if(!isNaN(parseInt(s))) countdownDisplay.textContent = s;
     else countdownDisplay.textContent = s;
   });
 }
 
-/* ---------------- Student logic ---------------- */
+/* ================= HỌC SINH ================= */
 function setupStudent(teamInfo){
   teamNameDisplay.textContent = teamInfo.name;
   buzzerButton.style.setProperty('--team-glow', teamInfo.glow);
   buzzerButton.style.background = teamInfo.code;
 
-  // initial: show visually disabled AND block clicks until teacher starts
-  buzzerButton.classList.add('disabled', 'no-pointer');
-  buzzerButton.setAttribute('aria-disabled','true');
-  buzzerButton.disabled = true;
-
-  // reset local counters for new round
+  // Khởi tạo
   localEarlyPressCount = 0;
   isFrozen = false;
   buzzerAllowed = false;
+  buzzerButton.classList.add('disabled', 'no-pointer');
+  buzzerButton.disabled = true;
 
-  // Listen teacher online status - if teacher disconnects, go back
+  // Nếu giáo viên thoát
   teacherStatusRef.on('value', snap => {
     if(snap.val() === false && userRole === 'student'){
       alert('Giáo viên đã thoát. Quay về chọn vai trò.');
@@ -217,118 +205,84 @@ function setupStudent(teamInfo){
     }
   });
 
-  // Listen game status
+  // Lắng nghe trạng thái game
   gameRef.child('status').on('value', async snap => {
     const s = snap.val();
+
     if(s === 'press_allowed'){
-      // Allowed to press -> fully enable
+      // Được phép bấm
       sounds.bip.play().catch(()=>{});
       buzzerAllowed = true;
       buzzerButton.classList.remove('disabled','no-pointer');
-      buzzerButton.classList.add('glow','shake');
-      buzzerButton.textContent = 'BẤM!';
-      buzzerButton.removeAttribute('aria-disabled');
       buzzerButton.disabled = false;
+      buzzerButton.textContent = 'BẤM!';
       buzzerStatus.textContent = 'TRẠNG THÁI: SẴN SÀNG';
-      setTimeout(()=>buzzerButton.classList.remove('shake'),450);
-    } else if(s === 'waiting'){
-      // waiting between rounds -> not clickable, visual disabled
+    } 
+    else if(s === 'waiting'){
+      // Chuẩn bị lượt mới
       buzzerAllowed = false;
-      buzzerButton.classList.remove('glow');
-      buzzerButton.textContent = 'CHỜ GIÁO VIÊN';
-      buzzerButton.classList.add('disabled', 'no-pointer'); // fully block clicks in waiting
-      buzzerButton.setAttribute('aria-disabled','true');
+      buzzerButton.classList.add('disabled','no-pointer');
       buzzerButton.disabled = true;
+      buzzerButton.textContent = 'CHỜ GIÁO VIÊN';
       buzzerStatus.textContent = 'TRẠNG THÁI: CHỜ';
-      if(isFrozen){
-        // unfreeze when waiting
-        freezeOverlay.classList.remove('active');
-        sounds.ping.play().catch(()=>{});
-        isFrozen = false;
-      }
-      // reset local early press counter for new round
+      freezeOverlay.classList.remove('active');
+      isFrozen = false;
       localEarlyPressCount = 0;
-      // ensure state reset if had been eliminated previous round (teacher start also resets)
-      await playersRef.child(studentTeam).child('state').once('value').then(snap => {
-        const st = snap.val();
-        if(st === 'eliminated'){
-          playersRef.child(studentTeam).update({ state:'waiting' });
-        }
-      });
-    } else if(s === 'countdown' || (!isNaN(parseInt(s)) && s !== 'waiting')){
-      // during countdown numbers - treat these as "not yet press_allowed"
+      await playersRef.child(studentTeam).update({ state:'waiting' });
+    }
+    else if(!isNaN(parseInt(s))){ 
+      // Đang đếm ngược
       buzzerAllowed = false;
-      buzzerButton.classList.remove('glow');
-      // Visual disabled but clickable so we can detect early presses
       buzzerButton.classList.add('disabled');
-      buzzerButton.classList.remove('no-pointer'); // <-- allow pointer events so early clicks fire
-      buzzerButton.disabled = false; // ensure JS-level disabled not blocking
-      buzzerButton.setAttribute('aria-disabled','true'); // aria still indicates not allowed
-      if(!isNaN(parseInt(s))){
-        buzzerButton.textContent = s;
-        buzzerStatus.textContent = 'ĐANG ĐẾM NGƯỢC';
-      } else {
-        buzzerButton.textContent = 'CHỜ...';
-        buzzerStatus.textContent = 'ĐANG CHUẨN BỊ';
-      }
+      buzzerButton.classList.remove('no-pointer'); // cho phép click để phát hiện spam
+      buzzerButton.disabled = false;
+      buzzerButton.textContent = s;
+      buzzerStatus.textContent = 'ĐANG ĐẾM NGƯỢC';
     }
   });
 
-  // Click handler for buzzer
-  buzzerButton.onclick = async (e) => {
-    // If already frozen for this client, ignore clicks
+  // Xử lý bấm nút
+  buzzerButton.onclick = async () => {
     if(isFrozen) return;
-
     const statusSnapshot = await gameRef.child('status').once('value');
     const status = statusSnapshot.val();
+    const now = Date.now();
 
     if(status === 'press_allowed'){
-      // valid press
+      // Bấm hợp lệ
       sounds.click.play().catch(()=>{});
-      buzzerButton.classList.add('pulse-once');
-      setTimeout(()=>buzzerButton.classList.remove('pulse-once'),900);
-      const now = Date.now();
       await playersRef.child(studentTeam).update({ state:'pressed', press_time: now });
       freezeOverlay.classList.add('active');
-      isFrozen = true;
-      buzzerAllowed = false;
       buzzerStatus.textContent = 'ĐÃ BẤM - CHỜ KẾT QUẢ';
-      // block further clicks locally (hard)
-      buzzerButton.classList.add('no-pointer');
-      buzzerButton.setAttribute('aria-disabled','true');
+      isFrozen = true;
+      buzzerButton.classList.add('disabled','no-pointer');
       buzzerButton.disabled = true;
-
-      // optionally auto reset game status after 5s by one client (teacher can also end)
-      setTimeout(async () => {
-        const current = (await gameRef.child('status').once('value')).val();
-        if(current === 'press_allowed') {
-          await gameRef.child('status').set('waiting');
-        }
-      }, 5000);
     } else {
-      // Early press (during countdown or waiting before press_allowed) -> penalty logic
-      // NOTE: because we allow pointer events during 'countdown' but not during 'waiting',
-      // this handler will mostly run when teacher has started countdown.
+      // Bấm sớm (spam / auto click)
       localEarlyPressCount++;
       if(localEarlyPressCount === 1){
-        // first early press -> warning + increment yellow_cards in DB
+        // Lần đầu: cảnh cáo
         buzzerStatus.textContent = '⚠️ CẢNH CÁO - THẺ VÀNG (1)';
-        await playersRef.child(studentTeam).child('yellow_cards').transaction(v => (v || 0) + 1);
+        await playersRef.child(studentTeam).update({
+          state: 'warning',
+          yellow_cards: firebase.database.ServerValue.increment(1),
+          early_press_time: now
+        });
         buzzerButton.classList.add('shake');
         setTimeout(()=>buzzerButton.classList.remove('shake'),400);
       } else if(localEarlyPressCount >= 2){
-        // >=2 early presses -> eliminated for this round
-        await playersRef.child(studentTeam).update({ state:'eliminated' });
+        // Lần thứ 2: bị loại
+        await playersRef.child(studentTeam).update({
+          state: 'eliminated',
+          early_press_time: now
+        });
         freezeOverlay.textContent = 'BỊ LOẠI! (2 lần phạm quy)';
         freezeOverlay.classList.add('active');
         sounds.lock.play().catch(()=>{});
         isFrozen = true;
         buzzerStatus.textContent = 'TRẠNG THÁI: BỊ LOẠI';
-        // disallow further clicks locally (hard)
-        buzzerButton.classList.add('disabled');
-        buzzerButton.classList.add('no-pointer');
-        buzzerButton.setAttribute('aria-disabled','true');
-        buzzerButton.disabled = true; // chặn tuyệt đối auto click
+        buzzerButton.classList.add('disabled','no-pointer');
+        buzzerButton.disabled = true;
       }
     }
   };
