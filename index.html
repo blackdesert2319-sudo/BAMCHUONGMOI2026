@@ -1,230 +1,219 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buzzer Game - Bấm Chuông</title>
-    
-    <script src="https://www.gstatic.com/firebasejs/7.19.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/7.19.1/firebase-database.js"></script>
-    
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f4f4f4;
-            transition: background-color 0.5s;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Buzzer Neon Game</title>
 
-        /* Hiệu ứng nhấp nháy cho màn hình học sinh */
-        @keyframes flash {
-            0%, 100% { background-color: #f4f4f4; }
-            50% { background-color: #FFD700; } /* Màu vàng sáng khi bấm */
-        }
-        .flashing-bg {
-            animation: flash 0.1s infinite alternate;
-        }
+  <script src="https://www.gstatic.com/firebasejs/7.19.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/7.19.1/firebase-database.js"></script>
 
-        /* Cấu trúc chung */
-        .screen {
-            background-color: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            width: 90%;
-            max-width: 600px;
-            display: none; /* Mặc định ẩn, sẽ được hiển thị bằng JS */
-            flex-direction: column;
-            align-items: center;
-        }
+  <style>
+    /* ======= Giao diện Neon Hiện Đại ======= */
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: radial-gradient(circle at center, #2b2b33 0%, #1a1a1f 100%);
+      color: #fff;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
 
-        /* Nút chọn vai trò */
-        .btn-role {
-            padding: 15px 30px;
-            font-size: 1.2em;
-            margin: 10px;
-            cursor: pointer;
-            border: none;
-            border-radius: 5px;
-            transition: background-color 0.3s;
-        }
-        .btn-role:hover:not(:disabled) {
-            opacity: 0.8;
-        }
-        .btn-role:disabled {
-            cursor: not-allowed;
-            opacity: 0.5;
-        }
+    .screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(6px);
+      width: 90%;
+      max-width: 600px;
+    }
 
-        /* Màn hình Học sinh */
-        #student-screen {
-            max-width: 400px;
-            min-height: 400px;
-            justify-content: space-between;
-        }
-        #buzzer-button {
-            width: 250px;
-            height: 250px;
-            border-radius: 50%;
-            font-size: 2.5em;
-            font-weight: bold;
-            color: white;
-            transition: transform 0.1s, background-color 0.5s;
-            cursor: pointer;
-            margin: 20px 0;
-            border: 8px solid #333;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-        }
-        #buzzer-button:active:not(:disabled) {
-            transform: scale(0.95);
-        }
-        #buzzer-status {
-            font-size: 1.2em;
-            color: #555;
-            min-height: 1.5em;
-        }
-        #team-name-display {
-            font-size: 1.5em;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
+    h2, h3 {
+      text-shadow: 0 0 10px rgba(255,255,255,0.3);
+    }
 
-        /* Màn hình Giáo viên */
-        #teacher-screen {
-            max-width: 800px;
-        }
-        #start-button, #end-round-button, #master-reset-button {
-            padding: 15px 30px;
-            font-size: 1.5em;
-            margin-bottom: 20px;
-            background-color: #3498DB;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        #countdown-display {
-            font-size: 3em;
-            margin-bottom: 20px;
-            font-weight: bold;
-            color: #333;
-        }
-        #teams-status {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            justify-content: center;
-            margin-top: 20px;
-            width: 100%;
-        }
-        .team-box {
-            padding: 15px;
-            border-radius: 5px;
-            color: white;
-            width: 150px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-        .team-name {
-            font-weight: bold;
-            font-size: 1.1em;
-        }
-        .team-state {
-            margin-top: 5px;
-            font-size: 0.9em;
-        }
+    /* ====== Nút chọn vai trò ====== */
+    .btn-role {
+      padding: 15px 30px;
+      margin: 10px;
+      font-size: 1.1em;
+      border: none;
+      border-radius: 10px;
+      color: white;
+      cursor: pointer;
+      transition: 0.3s;
+      box-shadow: 0 0 10px rgba(255,255,255,0.2);
+    }
+    .btn-role:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px currentColor;
+    }
 
-        /* Lớp phủ Băng */
-        #freeze-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.85); /* Màu tối mờ */
-            color: white;
-            font-size: 2em;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border-radius: 10px;
-            z-index: 10;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.5s;
-        }
-        #freeze-overlay.active {
-            opacity: 1;
-        }
-    </style>
+    /* ====== Nút bấm Neon ====== */
+    #buzzer-button {
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      font-size: 2em;
+      font-weight: bold;
+      border: none;
+      color: white;
+      margin: 30px 0;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.3s;
+      background: #333;
+      box-shadow:
+        0 0 20px rgba(255,255,255,0.1),
+        inset 0 0 10px rgba(0,0,0,0.8);
+    }
+
+    #buzzer-button.active {
+      animation: pulse 1.2s infinite;
+    }
+
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 0 25px 5px var(--team-color),
+                    0 0 60px 15px var(--team-color-transparent);
+      }
+      100% {
+        box-shadow: 0 0 10px 2px var(--team-color),
+                    0 0 20px 5px var(--team-color-transparent);
+      }
+    }
+
+    .pulse-once::after {
+      content: "";
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--team-color);
+      opacity: 0.7;
+      transform: translate(-50%, -50%) scale(0);
+      animation: ringPulse 0.8s forwards;
+    }
+
+    @keyframes ringPulse {
+      from { transform: translate(-50%, -50%) scale(0); opacity: 0.8; }
+      to   { transform: translate(-50%, -50%) scale(5); opacity: 0; }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(-6px, 0); }
+      50% { transform: translate(6px, 0); }
+      75% { transform: translate(-3px, 0); }
+    }
+
+    .shake {
+      animation: shake 0.4s;
+    }
+
+    /* ===== Overlay Đóng băng ===== */
+    #freeze-overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.6em;
+      color: #fff;
+      border-radius: 16px;
+      background-color: rgba(0,0,0,0.7);
+      opacity: 0;
+      transition: 0.4s;
+      pointer-events: none;
+    }
+    #freeze-overlay.active {
+      opacity: 1;
+      box-shadow: 0 0 25px 5px #00ffff55;
+      animation: freezeGlow 1.5s infinite alternate;
+    }
+    @keyframes freezeGlow {
+      from { box-shadow: 0 0 25px 5px #00ffff33; }
+      to   { box-shadow: 0 0 35px 10px #00ffff88; }
+    }
+
+    /* ===== Giao diện giáo viên ===== */
+    #teacher-screen button {
+      margin: 8px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      background-color: #4e73df;
+      border: none;
+      color: #fff;
+      font-size: 1.1em;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    #teacher-screen button:hover {
+      box-shadow: 0 0 20px #4e73dfaa;
+      transform: scale(1.05);
+    }
+    #teams-status {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .team-box {
+      padding: 12px;
+      border-radius: 10px;
+      color: white;
+      min-width: 120px;
+      text-shadow: 0 0 6px rgba(0,0,0,0.6);
+    }
+
+  </style>
 </head>
 <body>
 
-    <div id="role-selection-screen" class="screen">
-        <h2>Chọn Vai Trò</h2>
-        <button id="btn-teacher" class="btn-role" style="background-color: #2ECC71; color: white;">GIÁO VIÊN</button>
-        <hr style="width: 100%; margin: 20px 0;">
-        <h3>HỌC SINH (Chọn Đội)</h3>
-        <div id="student-role-buttons">
-            <button class="btn-role" data-color="red" style="background-color: #E74C3C;">Đội Đỏ</button>
-            <button class="btn-role" data-color="blue" style="background-color: #3498DB;">Đội Xanh Dương</button>
-            <button class="btn-role" data-color="green" style="background-color: #2ECC71;">Đội Xanh Lá</button>
-            <button class="btn-role" data-color="yellow" style="background-color: #F1C40F;">Đội Vàng</button>
-            <button class="btn-role" data-color="purple" style="background-color: #9B59B6;">Đội Tím</button>
-        </div>
+  <!-- Màn hình chọn vai trò -->
+  <div id="role-selection-screen" class="screen" style="display:flex">
+    <h2>Chọn Vai Trò</h2>
+    <button id="btn-teacher" class="btn-role" style="background-color:#27ae60;">Giáo viên</button>
+    <h3>Học sinh (chọn đội)</h3>
+    <div id="student-role-buttons">
+      <button class="btn-role" data-color="red" style="background-color:#e74c3c;">Đội Đỏ</button>
+      <button class="btn-role" data-color="blue" style="background-color:#3498db;">Đội Xanh Dương</button>
+      <button class="btn-role" data-color="green" style="background-color:#2ecc71;">Đội Xanh Lá</button>
+      <button class="btn-role" data-color="yellow" style="background-color:#f1c40f; color:#222;">Đội Vàng</button>
+      <button class="btn-role" data-color="purple" style="background-color:#9b59b6;">Đội Tím</button>
     </div>
+  </div>
 
-    <div id="teacher-screen" class="screen">
-        <h2>Màn Hình Giáo Viên</h2>
-        
-        <div id="result-display" style="font-size: 1.8em; color: green; margin-bottom: 15px; min-height: 1.5em; font-weight: bold;">
-            </div>
-        
-        <button id="start-button">BẮT ĐẦU LƯỢT MỚI</button>
-        
-        <button id="end-round-button" style="padding: 15px 30px; font-size: 1.2em; background-color: #3498DB; color: white; border: none; border-radius: 8px; margin-top: 10px; display: none;">
-            KẾT THÚC LƯỢT
-        </button>
-        
-        <div id="countdown-display">CHỜ LỆNH</div>
-        
-        <div id="teams-status">
-            </div>
+  <!-- Màn hình giáo viên -->
+  <div id="teacher-screen" class="screen">
+    <h2>Màn hình Giáo viên</h2>
+    <div id="result-display" style="min-height:1.5em; font-weight:bold; font-size:1.5em; color:#00ffcc; text-shadow:0 0 10px #00ffaa;"></div>
+    <button id="start-button">Bắt đầu lượt</button>
+    <button id="end-round-button" style="display:none;">Kết thúc lượt</button>
+    <button id="master-reset-button" style="background-color:#e74c3c;">Reset Tổng</button>
+    <div id="countdown-display" style="font-size:2em;margin-top:15px;">CHỜ LỆNH</div>
+    <div id="teams-status"></div>
+  </div>
 
-        <hr style="width: 100%; margin: 20px 0;">
+  <!-- Màn hình học sinh -->
+  <div id="student-screen" class="screen" style="position:relative;">
+    <div id="freeze-overlay">ĐÃ BẤM - CHỜ KẾT QUẢ</div>
+    <h2 id="team-name-display">ĐỘI CỦA BẠN</h2>
+    <button id="buzzer-button" disabled>CHỜ GIÁO VIÊN</button>
+    <div id="buzzer-status">TRẠNG THÁI: CHỜ</div>
+  </div>
 
-        <button id="master-reset-button" style="padding: 10px 20px; font-size: 1em; background-color: #E74C3C; color: white; border: none; border-radius: 5px;">
-            RESET TỔNG (KẾT THÚC CUỘC THI)
-        </button>
-    </div>
-    
-    <div id="student-screen" class="screen" style="position: relative;">
-        
-        <div id="audio-unlock-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; border-radius: 10px;">
-            <h3 style="color: yellow;">THIẾT BỊ DI ĐỘNG CẦN TƯƠNG TÁC</h3>
-            <p>Vui lòng bấm nút bên dưới để mở khóa âm thanh và rung.</p>
-            <button id="unlock-audio-button" style="padding: 15px 30px; font-size: 1.5em; background-color: #E74C3C; color: white; border: none; border-radius: 8px; margin-top: 15px; cursor: pointer;">
-                BẤM ĐỂ MỞ KHÓA ÂM THANH
-            </button>
-        </div>
-        
-        <div id="freeze-overlay">ĐÃ BẤM - CHỜ KẾT QUẢ</div>
-        <div id="team-name-display">ĐỘI CỦA BẠN</div>
-        
-        <button id="buzzer-button" disabled>
-            CHỜ GIÁO VIÊN
-        </button>
-        
-        <div id="buzzer-status">TRẠNG THÁI: CHỜ</div>
-    </div>
-
-    <script src="script.js"></script>
-
+  <script src="script.js"></script>
 </body>
 </html>
