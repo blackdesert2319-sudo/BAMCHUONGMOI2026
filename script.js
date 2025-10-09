@@ -1,478 +1,205 @@
-// =================================================================
-// 1. CẤU HÌNH & KHỞI TẠO FIREBASE
-// =================================================================
+// ============================================================
+//  BUZZER NEON - Firebase config (giữ nguyên cấu hình của bạn)
+// ============================================================
 
-// DÁN MÃ CẤU HÌNH CỦA BẠN VÀO ĐÂY
 const firebaseConfig = {
-    apiKey: "AIzaSyCDEa_NKenTTQqSj1CKYJP02Al1VQC29K",
-    authDomain: "bamchuong26.firebaseapp.com",
-    databaseURL: "https://bamchuong26-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "bamchuong26",
-    storageBucket: "bamchuong26.appspot.com", 
-    messagingSenderId: "1836167181367",
-    appId: "1:1836167181367:web:3882d805c836164908a4232",
-    measurementId: "G-Q7TT3TLYFV"
+  apiKey: "AIzaSyCDEa_NKenTTQqSj1CKYJP02Al1VQC29K",
+  authDomain: "bamchuong26.firebaseapp.com",
+  databaseURL: "https://bamchuong26-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "bamchuong26",
+  storageBucket: "bamchuong26.appspot.com",
+  messagingSenderId: "1836167181367",
+  appId: "1:1836167181367:web:3882d805c836164908a4232",
+  measurementId: "G-Q7TT3TLYFV"
 };
-
-// Khởi tạo Firebase
 firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
 
+const db = firebase.database();
 const gameRef = db.ref('game_session');
 const playersRef = db.ref('players');
-const teacherStatusRef = db.ref('teacher_status/online'); 
-
-// =================================================================
-// 2. KHAI BÁO BIẾN & CẤU HÌNH CỤC BỘ
-// =================================================================
+const teacherStatusRef = db.ref('teacher_status/online');
 
 const TEAM_COLORS = {
-    red: { name: 'Đội Đỏ', code: '#E74C3C' },
-    blue: { name: 'Đội Xanh Dương', code: '#3498DB' },
-    green: { name: 'Đội Xanh Lá', code: '#2ECC71' },
-    yellow: { name: 'Đội Vàng', code: '#F1C40F' },
-    purple: { name: 'Đội Tím', code: '#9B59B6' }
+  red: { name: 'Đội Đỏ', code: '#E74C3C' },
+  blue: { name: 'Đội Xanh Dương', code: '#3498DB' },
+  green: { name: 'Đội Xanh Lá', code: '#2ECC71' },
+  yellow: { name: 'Đội Vàng', code: '#F1C40F' },
+  purple: { name: 'Đội Tím', code: '#9B59B6' }
 };
 
-let userRole = null; 
-let studentTeam = null; 
-let buzzerAllowed = false; 
+// ============================================================
+// Âm thanh neon
+// ============================================================
+const sounds = {
+  bip: new Audio('neon_ping.mp3'),
+  ping: new Audio('energy_pulse.mp3'),
+  click: new Audio('electric_click.mp3'),
+  lock: new Audio('neon_lock.mp3')
+};
 
-let pressCountBeforeBuzzer = 0; 
-let isFrozen = false; 
-
-const audioBip = new Audio('bip.mp3'); 
-const audioPing = new Audio('ping.mp3'); 
-
-
-// Hàm cố gắng mở khóa audio VÀ rung bằng cách phát một âm thanh
-async function unlockAudio() {
-    try {
-        audioBip.volume = 1.0; 
-        audioPing.volume = 1.0; 
-        
-        // Cố gắng phát âm thanh để mở khóa AudioContext
-        await audioBip.play();
-        audioBip.pause(); 
-        audioBip.currentTime = 0;
-        
-        // Kích hoạt rung (thử nghiệm)
-        if ('vibrate' in navigator) {
-            navigator.vibrate(50); 
-        }
-
-        console.log("Audio and Vibration unlocked successfully!");
-        return true;
-    } catch (e) {
-        console.warn("Audio unlock failed, waiting for user interaction.");
-        return false;
-    }
-}
-
-
-// =================================================================
-// 3. LOGIC CHỌN VAI TRÒ & GÁN ĐỘI
-// =================================================================
-
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('role-selection-screen').style.display = 'block';
-
-    // Xử lý chọn Giáo viên
-    document.getElementById('btn-teacher').onclick = () => {
-        userRole = 'teacher';
-        showScreen('teacher-screen');
-        setupTeacherLogic();
-    };
-
-    // Xử lý chọn Học sinh
-    document.querySelectorAll('#student-role-buttons .btn-role').forEach(button => {
-        button.onclick = async (e) => {
-            const color = e.target.dataset.color;
-            const teamInfo = TEAM_COLORS[color];
-            const playerPath = `players/${color}`;
-
-            const snapshot = await db.ref(playerPath).once('value');
-            if (snapshot.exists()) {
-                alert(`Đội ${teamInfo.name} đã có người chọn. Vui lòng chọn đội khác!`);
-                return;
-            }
-
-            await db.ref(playerPath).set({
-                team_name: teamInfo.name,
-                color: color,
-                state: 'waiting',
-                press_time: 0,
-                press_count: 0, 
-                yellow_cards: 0 
-            });
-
-            studentTeam = color;
-            userRole = 'student';
-            showScreen('student-screen');
-            
-            // Chờ nút bấm trên màn hình HS để mở khóa audio
-            setupStudentLogic(teamInfo);
-        };
-    });
-    
-    // Đồng bộ trạng thái các nút
-    playersRef.on('value', (snapshot) => {
-        const selectedTeams = snapshot.val() || {};
-        document.querySelectorAll('#student-role-buttons .btn-role').forEach(button => {
-            const color = button.dataset.color;
-            if (selectedTeams[color] && selectedTeams[color].state !== 'waiting' && !studentTeam) { 
-                button.disabled = true;
-                button.textContent = TEAM_COLORS[color].name + ' (ĐÃ CHỌN)';
-            } else if (studentTeam && button.dataset.color === studentTeam) {
-                 button.disabled = true; 
-            } else {
-                button.disabled = false;
-                button.textContent = TEAM_COLORS[color].name;
-            }
-        });
-    });
+// unlock audio context khi người dùng click
+document.body.addEventListener('click', function unlockAudio() {
+  Object.values(sounds).forEach(a => { a.play().catch(()=>{}); a.pause(); a.currentTime=0; });
+  document.body.removeEventListener('click', unlockAudio);
 });
 
-function showScreen(screenId) {
-    document.getElementById('role-selection-screen').style.display = 'none';
-    document.getElementById('teacher-screen').style.display = 'none';
-    document.getElementById('student-screen').style.display = 'none';
-    document.getElementById(screenId).style.display = 'flex';
+// ============================================================
+//  Vai trò và trạng thái người dùng
+// ============================================================
+let userRole = null;
+let studentTeam = null;
+let buzzerAllowed = false;
+let isFrozen = false;
+
+// ============================================================
+//  Chọn vai trò
+// ============================================================
+document.getElementById('btn-teacher').onclick = () => {
+  userRole = 'teacher';
+  showScreen('teacher-screen');
+  setupTeacher();
+};
+
+document.querySelectorAll('#student-role-buttons .btn-role').forEach(btn=>{
+  btn.onclick = async e=>{
+    const color = e.target.dataset.color;
+    const teamInfo = TEAM_COLORS[color];
+    const ref = playersRef.child(color);
+    const snap = await ref.once('value');
+    if(snap.exists()){ alert("Đội đã có người chọn!"); return; }
+
+    await ref.set({ team_name: teamInfo.name, color, state:'waiting', press_time:0 });
+    studentTeam = color;
+    userRole = 'student';
+    showScreen('student-screen');
+    setupStudent(teamInfo);
+  };
+});
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.style.display='none');
+  document.getElementById(id).style.display='flex';
 }
 
-// Hàm thoát chung cho học sinh
-function exitStudentRole() {
-    // Xóa dữ liệu của đội này (tùy chọn)
-    if (studentTeam) {
-        playersRef.child(studentTeam).remove();
+// ============================================================
+//  Giáo viên
+// ============================================================
+function setupTeacher(){
+  const startBtn = document.getElementById('start-button');
+  const endBtn = document.getElementById('end-round-button');
+  const resetBtn = document.getElementById('master-reset-button');
+  const result = document.getElementById('result-display');
+  const countdown = document.getElementById('countdown-display');
+  const teamDiv = document.getElementById('teams-status');
+
+  teacherStatusRef.set(true);
+  teacherStatusRef.onDisconnect().set(false);
+
+  startBtn.onclick = async ()=>{
+    startBtn.disabled = true;
+    result.textContent = "";
+    await gameRef.set({status:'countdown', last_start_time:Date.now()});
+    const snap = await playersRef.once('value');
+    snap.forEach(ch => playersRef.child(ch.key).update({state:'waiting', press_time:0}));
+    let count = 3;
+    const timer = setInterval(()=>{
+      if(count>0){
+        gameRef.child('status').set(count);
+        count--;
+      } else {
+        clearInterval(timer);
+        gameRef.child('status').set('press_allowed');
+        startBtn.style.display='none';
+        endBtn.style.display='inline-block';
+        startBtn.disabled = false;
+      }
+    }, 1000);
+  };
+
+  endBtn.onclick = async ()=>{
+    await gameRef.set({status:'waiting'});
+    startBtn.style.display='inline-block';
+    endBtn.style.display='none';
+    result.textContent = "CHỜ LỆNH";
+  };
+
+  resetBtn.onclick = async ()=>{
+    if(!confirm("Reset toàn bộ?")) return;
+    await playersRef.remove();
+    await gameRef.set({status:'waiting'});
+    teacherStatusRef.set(false);
+    location.reload();
+  };
+
+  // hiển thị trạng thái đội
+  playersRef.on('value', snap=>{
+    const data = snap.val()||{};
+    teamDiv.innerHTML='';
+    const pressed = Object.values(data).filter(p=>p.state==='pressed').sort((a,b)=>a.press_time-b.press_time);
+    if(pressed[0]) result.textContent = `🥇 ${pressed[0].team_name} đã bấm trước!`;
+    Object.values(data).forEach(p=>{
+      const box = document.createElement('div');
+      box.className='team-box';
+      box.style.backgroundColor = TEAM_COLORS[p.color].code;
+      box.textContent = `${p.team_name} - ${p.state}`;
+      if(pressed[0] && pressed[0].team_name===p.team_name) box.style.boxShadow='0 0 25px gold';
+      teamDiv.appendChild(box);
+    });
+  });
+
+  gameRef.child('status').on('value',snap=>{
+    const s=snap.val();
+    if(s==='press_allowed') countdown.textContent='BẤM!';
+    else if(s==='waiting') countdown.textContent='CHỜ LỆNH';
+    else countdown.textContent=s;
+  });
+}
+
+// ============================================================
+//  Học sinh
+// ============================================================
+function setupStudent(team){
+  const buzzer=document.getElementById('buzzer-button');
+  const freeze=document.getElementById('freeze-overlay');
+  const status=document.getElementById('buzzer-status');
+  buzzer.style.setProperty('--team-color', team.code);
+  buzzer.style.setProperty('--team-color-transparent', team.code+'55');
+  buzzer.style.backgroundColor = team.code;
+
+  gameRef.child('status').on('value',async snap=>{
+    const s=snap.val();
+    if(s==='press_allowed'){
+      sounds.bip.play();
+      buzzer.disabled=false;
+      buzzer.textContent='BẤM!';
+      buzzer.classList.add('active','shake');
+      setTimeout(()=>buzzer.classList.remove('shake'),500);
+      buzzerAllowed=true;
+    } else if(!isNaN(parseInt(s))){
+      buzzer.textContent=s;
+      buzzer.disabled=true;
+    } else if(s==='waiting'){
+      buzzer.textContent='CHỜ GIÁO VIÊN';
+      buzzer.disabled=true;
+      buzzer.classList.remove('active');
+      if(isFrozen){
+        freeze.classList.remove('active');
+        sounds.ping.play();
+        isFrozen=false;
+      }
     }
-    // Chuyển về màn hình chọn vai trò
-    showScreen('role-selection-screen');
-    studentTeam = null;
-    userRole = null;
-    isFrozen = false;
-    // Tải lại trang để reset listener
-    window.location.reload(); 
-}
+  });
 
-
-// =================================================================
-// 4. LOGIC MÁY GIÁO VIÊN 
-// =================================================================
-
-function setupTeacherLogic() {
-    const startButton = document.getElementById('start-button');
-    const endRoundButton = document.getElementById('end-round-button'); // Nút KẾT THÚC LƯỢT
-    const masterResetButton = document.getElementById('master-reset-button'); // Nút RESET TỔNG
-    const countdownDisplay = document.getElementById('countdown-display');
-    const resultDisplay = document.getElementById('result-display');
-    
-    // Báo hiệu GV online và đăng ký onDisconnect
-    teacherStatusRef.set(true);
-    teacherStatusRef.onDisconnect().set(false); 
-    
-    // Theo dõi trạng thái các đội (Hiển thị & Xác định người chiến thắng)
-    playersRef.on('value', (snapshot) => {
-        const teamsData = snapshot.val() || {};
-        const teamsStatusDiv = document.getElementById('teams-status');
-        teamsStatusDiv.innerHTML = '';
-        
-        let allPlayers = Object.values(teamsData);
-        
-        // 1. Sắp xếp và tìm người bấm hợp lệ đầu tiên
-        let pressedPlayers = allPlayers
-            .filter(p => p.state === 'pressed' && p.press_time > 0)
-            .sort((a, b) => a.press_time - b.press_time);
-
-        // 2. Cập nhật màn hình kết quả
-        if (pressedPlayers.length > 0) {
-            const winner = pressedPlayers[0];
-            resultDisplay.innerHTML = `🥇 **${winner.team_name}** ĐÃ BẤM TRƯỚC!`;
-            
-            // Khi có người bấm, hiện nút KẾT THÚC LƯỢT và ẩn nút BẮT ĐẦU
-            startButton.style.display = 'none';
-            endRoundButton.style.display = 'block';
-        } else {
-            resultDisplay.textContent = 'Đang chờ bấm...';
-            // Logic ẩn/hiện nút START/END ROUND
-            gameRef.child('status').once('value').then(snap => {
-                const status = snap.val();
-                if (status === 'press_allowed') {
-                    startButton.style.display = 'none';
-                    endRoundButton.style.display = 'block';
-                } else if (status === 'waiting') {
-                    startButton.style.display = 'block';
-                    endRoundButton.style.display = 'none';
-                }
-            });
-        }
-
-        // 3. Hiển thị trạng thái các đội 
-        const teamsToDisplay = [...pressedPlayers, ...allPlayers.filter(p => p.state !== 'pressed')];
-
-        teamsToDisplay.forEach(player => {
-            if (!player || !player.color) return;
-            const teamBox = document.createElement('div');
-            teamBox.className = 'team-box';
-            
-            if (player.state === 'pressed' && player.team_name === pressedPlayers[0]?.team_name) {
-                teamBox.style.backgroundColor = 'gold'; 
-                teamBox.style.color = '#333';
-            } else {
-                teamBox.style.backgroundColor = TEAM_COLORS[player.color].code;
-            }
-            
-            let statusText = '';
-            if (player.state === 'waiting') statusText = 'CHỜ';
-            else if (player.state === 'pressed') statusText = 'ĐÃ BẤM';
-            else if (player.state === 'eliminated') statusText = 'BỊ LOẠI';
-            
-            let cardText = player.yellow_cards > 0 ? ` (Thẻ Vàng: ${player.yellow_cards})` : '';
-
-            teamBox.innerHTML = `
-                <div class="team-name">${player.team_name}</div>
-                <div class="team-state">${statusText}${cardText}</div>
-            `;
-            teamsStatusDiv.appendChild(teamBox);
-        });
-    });
-    
-    // Theo dõi trạng thái đếm ngược từ Firebase
-    gameRef.child('status').on('value', (snapshot) => {
-        const status = snapshot.val();
-        if (status === 'press_allowed') {
-            countdownDisplay.innerHTML = '<span style="color: red; animation: pulse 0.5s infinite;">BẤM!</span>';
-        } else if (status === 'waiting') {
-            countdownDisplay.textContent = 'CHỜ LỆNH';
-        } else if (status) {
-            countdownDisplay.textContent = status; 
-        }
-    });
-
-    // Xử lý nút KẾT THÚC LƯỢT (Đưa game về trạng thái chờ, giữ nguyên dữ liệu người chơi)
-    endRoundButton.onclick = async () => {
-        await gameRef.set({ status: 'waiting', last_start_time: 0 });
-        resultDisplay.textContent = 'CHỜ LỆNH';
-        startButton.style.display = 'block';
-        endRoundButton.style.display = 'none';
-    };
-
-    // Xử lý nút RESET TỔNG (KẾT THÚC CUỘC THI)
-    masterResetButton.onclick = async () => {
-        if (!confirm('BẠN CÓ CHẮC CHẮN MUỐN RESET TỔNG? Điều này sẽ xóa TẤT CẢ dữ liệu người chơi và thẻ phạt.')) {
-            return;
-        }
-
-        // Xóa tất cả dữ liệu người chơi
-        await playersRef.remove(); 
-        // Xóa trạng thái game
-        await gameRef.set({ status: 'waiting', last_start_time: 0 });
-        // Tắt cờ online của Giáo viên
-        await teacherStatusRef.set(false);
-        
-        // Tải lại trang để reset giao diện
-        window.location.reload();
-    };
-
-    // Xử lý BẮT ĐẦU lượt chơi 
-    startButton.onclick = () => { 
-        gameRef.set({ status: 'countdown', last_start_time: Date.now() })
-        
-        .then(() => { 
-            // Reset trạng thái chơi của tất cả các đội về 'waiting'
-            return playersRef.once('value');
-        })
-        .then(snapshot => {
-            const updates = {};
-            snapshot.forEach(child => {
-                updates[child.key + '/state'] = 'waiting';
-                updates[child.key + '/press_time'] = 0;
-            });
-            return playersRef.update(updates);
-        })
-        
-        .then(() => { 
-            startButton.disabled = true;
-            let countdown = 4;
-            let timer;
-            
-            const runCountdown = () => {
-                if (countdown >= 0) {
-                    const displayNum = countdown === 0 ? '1' : countdown.toString();
-                    gameRef.child('status').set(displayNum);
-                    countdown--;
-                    
-                    const delay = Math.random() * (1500 - 500) + 500;
-                    
-                    if (Math.random() < 0.3 || countdown === -1) { 
-                        clearTimeout(timer);
-                        setTimeout(() => {
-                            gameRef.child('status').set('press_allowed');
-                            startButton.style.display = 'none'; 
-                            endRoundButton.style.display = 'block';
-                            startButton.disabled = false;
-                        }, delay);
-                        return;
-                    }
-                    
-                    timer = setTimeout(runCountdown, 1500);
-                }
-            };
-            
-            timer = setTimeout(runCountdown, 1500); 
-        })
-        .catch(error => {
-            console.error("Lỗi khi bắt đầu lượt chơi:", error);
-            alert("Lỗi kết nối Firebase, kiểm tra Console!");
-            startButton.disabled = false;
-        });
-    };
-}
-
-
-// =================================================================
-// 5. LOGIC MÁY HỌC SINH 
-// =================================================================
-
-function setupStudentLogic(teamInfo) {
-    const buzzerButton = document.getElementById('buzzer-button');
-    const teamNameDisplay = document.getElementById('team-name-display');
-    const buzzerStatus = document.getElementById('buzzer-status');
-    const freezeOverlay = document.getElementById('freeze-overlay');
-    const audioUnlockOverlay = document.getElementById('audio-unlock-overlay'); 
-    const unlockAudioButton = document.getElementById('unlock-audio-button');     
-    const playerPath = `players/${studentTeam}`;
-
-    teamNameDisplay.textContent = teamInfo.name;
-    buzzerButton.style.backgroundColor = teamInfo.code;
-    
-    // HIỂN THỊ LỚP PHỦ MỞ KHÓA NGAY KHI VÀO MÀN HÌNH HS
-    audioUnlockOverlay.style.display = 'flex'; 
-
-    // XỬ LÝ NÚT MỞ KHÓA AUDIO
-    unlockAudioButton.onclick = async () => {
-        await unlockAudio();
-        audioUnlockOverlay.style.display = 'none'; // Ẩn lớp phủ sau khi mở khóa
-    };
-
-    // Theo dõi trạng thái GV và buộc thoát
-    teacherStatusRef.on('value', (snapshot) => {
-        if (snapshot.val() === false && userRole === 'student') {
-            alert('Giáo viên đã thoát khỏi phiên. Bạn sẽ được đưa về màn hình chọn vai trò.');
-            // Dừng theo dõi trạng thái player trước khi thoát
-            playersRef.child(studentTeam).off(); 
-            exitStudentRole();
-        }
-    });
-
-    gameRef.child('status').on('value', async (snapshot) => {
-        const status = snapshot.val();
-        
-        // *** LỖI ĐƯỢC SỬA: CHẶN LOGIC GAME NẾU CHƯA MỞ KHÓA AUDIO ***
-        if (audioUnlockOverlay.style.display !== 'none') {
-            buzzerStatus.textContent = 'TRẠNG THÁI: CHỜ MỞ KHÓA AUDIO';
-            buzzerButton.disabled = true;
-            return; // Dừng xử lý logic game nếu chưa mở khóa audio
-        }
-        // ********************************************************
-        
-        // --- 1. TRẠNG THÁI: BẤM! (KHI NÚT BẤM XUẤT HIỆN) ---
-        if (status === 'press_allowed') {
-            // GỌI RUNG VÀ ÂM THANH KHI NÚT BẤM XUẤT HIỆN
-            audioBip.play(); 
-            if ('vibrate' in navigator) {
-                navigator.vibrate(100); 
-            }
-            
-            document.body.classList.add('flashing-bg');
-            setTimeout(() => document.body.classList.remove('flashing-bg'), 500);
-
-            let currentState = (await db.ref(playerPath + '/state').once('value')).val();
-            if (currentState !== 'eliminated' && !isFrozen) { 
-                buzzerAllowed = true;
-                buzzerButton.disabled = false;
-                buzzerButton.textContent = 'BẤM!';
-                pressCountBeforeBuzzer = 0; 
-            }
-        
-        // --- 2. TRẠNG THÁI: ĐANG ĐẾM NGƯỢC
-        } else if (!isNaN(parseInt(status)) && status !== 'waiting') {
-            buzzerButton.textContent = status;
-            buzzerButton.disabled = false; 
-            buzzerStatus.textContent = 'TRẠNG THÁI: ĐANG ĐẾM';
-            buzzerAllowed = false;
-            
-        // --- 3. TRẠNG THÁI: CHỜ (Sau khi bấm hoặc GV reset lượt)
-        } else if (status === 'waiting') {
-            // Mở băng khi lượt mới bắt đầu (Hồi sinh)
-            if (isFrozen) {
-                // GỌI RUNG VÀ ÂM THANH KHI ĐƯỢC HỒI SINH/KẾT THÚC LƯỢT
-                audioPing.play();
-                if ('vibrate' in navigator) {
-                    navigator.vibrate([50, 50, 50]); 
-                }
-                freezeOverlay.classList.remove('active'); 
-                
-                buzzerButton.style.backgroundColor = teamInfo.code;
-                buzzerButton.style.color = 'white';
-                buzzerStatus.textContent = 'TRẠNG THÁI: CHỜ';
-            }
-            isFrozen = false;
-            buzzerAllowed = false;
-            buzzerButton.disabled = true;
-            buzzerButton.textContent = 'CHỜ GIÁO VIÊN';
-        }
-    });
-
-    // Xử lý Bấm Chuông
-    buzzerButton.onclick = async () => {
-        const currentTime = Date.now();
-        
-        if (buzzerAllowed && !isFrozen) {
-            // LUẬT 1: Bấm Hợp Lệ
-            isFrozen = true;
-            buzzerAllowed = false;
-            
-            await db.ref(playerPath).update({
-                state: 'pressed',
-                press_time: currentTime 
-            });
-            
-            // Học sinh tự động reset game_session/status sau 5 giây (đúng theo yêu cầu bạn muốn)
-            setTimeout(async () => {
-                const status = (await gameRef.child('status').once('value')).val();
-                if (status === 'press_allowed') {
-                    await gameRef.child('status').set('waiting');
-                }
-            }, 5000);
-
-            buzzerButton.disabled = true;
-            freezeOverlay.classList.add('active'); 
-            freezeOverlay.textContent = 'ĐÃ BẤM - CHỜ KẾT QUẢ';
-            buzzerStatus.textContent = 'ĐÃ BẤM - CHỜ KẾT QUẢ';
-            
-        } else if (!buzzerAllowed && !isFrozen) {
-            // LUẬT 2: Kiểm soát hành vi spam 
-            
-            let gameStatus = (await gameRef.child('status').once('value')).val();
-
-            if (!isNaN(parseInt(gameStatus))) { 
-                
-                pressCountBeforeBuzzer++;
-                
-                if (pressCountBeforeBuzzer === 1) {
-                    buzzerStatus.textContent = 'CẢNH CÁO THẺ VÀNG! (1 lần phạm quy)';
-                    db.ref(playerPath + '/yellow_cards').transaction((current) => (current || 0) + 1);
-                    
-                } else if (pressCountBeforeBuzzer >= 2) {
-                    isFrozen = true;
-                    buzzerButton.disabled = true;
-                    freezeOverlay.classList.add('active');
-                    freezeOverlay.textContent = 'BỊ LOẠI! (2 lần phạm quy liên tiếp)';
-                    buzzerStatus.textContent = 'TRẠNG THÁI: BỊ LOẠI';
-                    await db.ref(playerPath).update({ state: 'eliminated' });
-                }
-            } 
-        }
-    };
+  buzzer.onclick=async ()=>{
+    if(!buzzerAllowed) return;
+    buzzer.classList.add('pulse-once');
+    sounds.click.play();
+    setTimeout(()=>buzzer.classList.remove('pulse-once'),800);
+    const now=Date.now();
+    await playersRef.child(studentTeam).update({state:'pressed',press_time:now});
+    freeze.classList.add('active');
+    isFrozen=true;
+    buzzerAllowed=false;
+    status.textContent='ĐÃ BẤM - CHỜ KẾT QUẢ';
+  };
 }
