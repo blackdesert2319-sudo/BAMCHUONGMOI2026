@@ -24,7 +24,7 @@
       font-family: Inter, "Segoe UI", Roboto, sans-serif;
       background: linear-gradient(180deg,var(--bg2),var(--bg1));
       overflow:hidden;
-      touch-action: none;
+      /* NOTE: removed touch-action:none to avoid blocking clicks on some devices */
     }
 
     .neon-bg {
@@ -83,6 +83,7 @@
       font-weight:600; font-size:0.95rem;
       box-shadow: 0 6px 18px rgba(0,0,0,0.5);
       color:#06121a;
+      pointer-events:auto;
     }
     .btn-green{ background:#27ae60; }
     .btn-teal{ background:#00d4ff; color:#012; }
@@ -107,7 +108,7 @@
     .student-area { display:flex; flex-direction:column; align-items:center; gap:8px; width:100%; }
     #team-name-display { font-size:1.2rem; font-weight:800; color:#dff7ff; }
 
-    /* ✅ CHỈNH MỚI – chữ lớn và sáng neon hơn */
+    /* CHỈNH MỚI – chữ lớn và sáng neon hơn */
     #buzzer-button {
       width: 78vw; max-width:360px; height:78vw; max-height:360px;
       border-radius:50%;
@@ -119,6 +120,7 @@
       position:relative; overflow:visible;
       letter-spacing: 1px;
       text-shadow: 0 0 12px rgba(255,255,255,0.8), 0 0 24px rgba(255,255,255,0.4);
+      cursor: pointer;
     }
     #buzzer-button.disabled { opacity:0.5; pointer-events:none; transform:scale(.995); }
 
@@ -214,14 +216,5 @@
   </div>
 
   <script src="script.js"></script>
-  <script>
-    document.addEventListener('gesturestart', e => e.preventDefault(), { passive:false });
-    let lastTouch = 0;
-    document.addEventListener('touchstart', e => {
-      const now = Date.now();
-      if (now - lastTouch <= 300) e.preventDefault();
-      lastTouch = now;
-    }, { passive:false });
-  </script>
 </body>
 </html>
