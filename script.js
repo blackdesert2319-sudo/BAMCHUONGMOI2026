@@ -30,7 +30,7 @@ const sounds = {
   bip: new Audio('neon_ping.mp3'),        // khi BẤM! xuất hiện
   ping: new Audio('energy_pulse.mp3'),   // khi mở lượt mới
   click: new Audio('electric_click.mp3'),// khi HS bấm
-  lock: new Audio('neon_lock.mp3')       // khi bị loại (nếu muốn)
+  lock: new Audio('neon_lock.mp3')       // khi bị loại
 };
 
 // unlock audio context on first user interaction
@@ -86,19 +86,14 @@ function showScreen(mode){
 
 /* ---------------- Teacher logic ---------------- */
 function setupTeacher(){
-  // mark teacher online
   teacherStatusRef.set(true);
   teacherStatusRef.onDisconnect().set(false);
-
-  // reset UI
   resultDisplay.textContent = '';
   countdownDisplay.textContent = 'CHỜ LỆNH';
 
-  // start button logic: random countdown 4->1 with each number duration random 0.5-1.5s
   startButton.onclick = async () => {
     startButton.disabled = true;
     resultDisplay.textContent = '';
-    // reset all players (hồi sinh: mỗi lượt đều hồi sinh theo yêu cầu A)
     const snap = await playersRef.once('value');
     const updates = {};
     snap.forEach(ch => {
@@ -106,27 +101,20 @@ function setupTeacher(){
       updates[ch.key + '/press_time'] = 0;
     });
     await playersRef.update(updates);
-    // set game status to 'countdown'
     await gameRef.set({ status: 'countdown', last_start_time: Date.now() });
-    // choose revealAfter: 1..4 meaning after that many numbers show "press_allowed"
     const revealAfter = Math.floor(Math.random()*4)+1;
     let step = 4;
     let doneSteps = 0;
     (async function runCountdown(){
       while(step >= 1){
-        // show current number
         await gameRef.child('status').set(step);
-        // wait random 0.5-1.5s
         const delay = 500 + Math.random()*1000;
         await new Promise(r=>setTimeout(r, delay));
         doneSteps++;
-        // if we reach revealAfter -> show press_allowed
         if(doneSteps === revealAfter){
-          // small extra random delay to make feel unpredictable
           const extra = 200 + Math.random()*1200;
           await new Promise(r=>setTimeout(r, extra));
           await gameRef.child('status').set('press_allowed');
-          // play sound for teacher side as well (optional)
           startButton.style.display='none';
           endRoundButton.style.display='inline-block';
           startButton.disabled = false;
@@ -134,7 +122,6 @@ function setupTeacher(){
         }
         step--;
       }
-      // if loop completes without reveal (fallback) -> set press_allowed
       await gameRef.child('status').set('press_allowed');
       startButton.style.display='none';
       endRoundButton.style.display='inline-block';
@@ -142,7 +129,6 @@ function setupTeacher(){
     })();
   };
 
-  // end round
   endRoundButton.onclick = async () => {
     await gameRef.set({ status: 'waiting' });
     startButton.style.display='inline-block';
@@ -150,7 +136,6 @@ function setupTeacher(){
     resultDisplay.textContent = 'CHỜ LỆNH';
   };
 
-  // master reset
   masterResetButton.onclick = async () => {
     if(!confirm('Reset toàn bộ dữ liệu?')) return;
     await playersRef.remove();
@@ -159,17 +144,13 @@ function setupTeacher(){
     location.reload();
   };
 
-  // listen players and show status
   playersRef.on('value', snap => {
     const data = snap.val() || {};
     teamsStatus.innerHTML = '';
-    // find pressed earliest
     const arr = Object.entries(data).map(([k,v])=> ({ key:k, ...v }));
     const pressed = arr.filter(p=>p.state==='pressed' && p.press_time>0).sort((a,b)=>a.press_time-b.press_time);
     if(pressed[0]) resultDisplay.textContent = `🥇 ${pressed[0].team_name} đã bấm trước!`;
     else resultDisplay.textContent = 'Đang chờ bấm...';
-
-    // display each team
     arr.forEach(p=>{
       const box = document.createElement('div');
       box.className='team-box';
@@ -182,7 +163,6 @@ function setupTeacher(){
     });
   });
 
-  // listen game status
   gameRef.child('status').on('value', snap => {
     const s = snap.val();
     if(s === 'press_allowed') countdownDisplay.textContent = 'BẤM!';
@@ -200,12 +180,10 @@ function setupStudent(teamInfo){
   buzzerButton.classList.add('disabled');
   buzzerButton.setAttribute('aria-disabled','true');
 
-  // reset local counters for new round
   localEarlyPressCount = 0;
   isFrozen = false;
   buzzerAllowed = false;
 
-  // Listen teacher online status - if teacher disconnects, go back
   teacherStatusRef.on('value', snap => {
     if(snap.val() === false && userRole === 'student'){
       alert('Giáo viên đã thoát. Quay về chọn vai trò.');
@@ -214,11 +192,9 @@ function setupStudent(teamInfo){
     }
   });
 
-  // Listen game status
   gameRef.child('status').on('value', async snap => {
     const s = snap.val();
     if(s === 'press_allowed'){
-      // Allowed to press
       sounds.bip.play().catch(()=>{});
       buzzerAllowed = true;
       buzzerButton.classList.remove('disabled');
@@ -227,7 +203,6 @@ function setupStudent(teamInfo){
       buzzerStatus.textContent = 'TRẠNG THÁI: SẴN SÀNG';
       setTimeout(()=>buzzerButton.classList.remove('shake'),450);
     } else if(s === 'waiting'){
-      // new round or waiting
       buzzerAllowed = false;
       buzzerButton.classList.remove('glow');
       buzzerButton.textContent = 'CHỜ GIÁO VIÊN';
@@ -235,14 +210,11 @@ function setupStudent(teamInfo){
       buzzerButton.setAttribute('aria-disabled','true');
       buzzerStatus.textContent = 'TRẠNG THÁI: CHỜ';
       if(isFrozen){
-        // unfreeze when waiting (GV bắt đầu lượt mới will set waiting then they press start)
         freezeOverlay.classList.remove('active');
         sounds.ping.play().catch(()=>{});
         isFrozen = false;
       }
-      // reset local early press counter for new round
       localEarlyPressCount = 0;
-      // ensure state reset if had been eliminated previous round (teacher start also resets)
       await playersRef.child(studentTeam).child('state').once('value').then(snap => {
         const st = snap.val();
         if(st === 'eliminated'){
@@ -250,7 +222,6 @@ function setupStudent(teamInfo){
         }
       });
     } else if(s === 'countdown' || (!isNaN(parseInt(s)) && s !== 'waiting')){
-      // during countdown numbers - treat these as "not yet press_allowed"
       buzzerAllowed = false;
       buzzerButton.classList.remove('glow');
       buzzerButton.classList.add('disabled');
@@ -265,17 +236,14 @@ function setupStudent(teamInfo){
     }
   });
 
-  // Click handler for buzzer
+  // --- Xử lý nhấn nút ---
   buzzerButton.onclick = async (e) => {
-    // if currently not allowed but not frozen => early press
     const statusSnapshot = await gameRef.child('status').once('value');
     const status = statusSnapshot.val();
-
-    // If already frozen for this client, ignore clicks
     if(isFrozen) return;
 
     if(status === 'press_allowed'){
-      // valid press
+      // Hợp lệ
       sounds.click.play().catch(()=>{});
       buzzerButton.classList.add('pulse-once');
       setTimeout(()=>buzzerButton.classList.remove('pulse-once'),900);
@@ -285,7 +253,6 @@ function setupStudent(teamInfo){
       isFrozen = true;
       buzzerAllowed = false;
       buzzerStatus.textContent = 'ĐÃ BẤM - CHỜ KẾT QUẢ';
-      // optionally auto reset game status after 5s by one client (teacher can also end)
       setTimeout(async () => {
         const current = (await gameRef.child('status').once('value')).val();
         if(current === 'press_allowed') {
@@ -293,25 +260,23 @@ function setupStudent(teamInfo){
         }
       }, 5000);
     } else {
-      // Early press (during countdown or waiting before press_allowed) -> penalty logic
+      // Phát hiện spam / auto click trong giai đoạn đếm ngược
       localEarlyPressCount++;
       if(localEarlyPressCount === 1){
-        // first early press -> warning + increment yellow_cards in DB
         buzzerStatus.textContent = '⚠️ CẢNH CÁO - THẺ VÀNG (1)';
         await playersRef.child(studentTeam).child('yellow_cards').transaction(v => (v || 0) + 1);
-        // brief visual feedback
         buzzerButton.classList.add('shake');
         setTimeout(()=>buzzerButton.classList.remove('shake'),400);
       } else if(localEarlyPressCount >= 2){
-        // >=2 early presses -> eliminated for this round
         await playersRef.child(studentTeam).update({ state:'eliminated' });
         freezeOverlay.textContent = 'BỊ LOẠI! (2 lần phạm quy)';
         freezeOverlay.classList.add('active');
         sounds.lock.play().catch(()=>{});
         isFrozen = true;
         buzzerStatus.textContent = 'TRẠNG THÁI: BỊ LOẠI';
-        // disallow further clicks locally
         buzzerButton.classList.add('disabled');
+        buzzerButton.setAttribute('aria-disabled','true');
+        buzzerButton.disabled = true; // 🔹 CHẶN HOÀN TOÀN AUTO CLICK
       }
     }
   };
