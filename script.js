@@ -288,11 +288,11 @@ function setupStudent(teamInfo){
     const statusSnapshot = await gameRef.child('status').once('value');
     const status = statusSnapshot.val();
 
-    // If already frozen for this client (do not increment counter or apply logic)
+    // Nếu đã bị khóa vĩnh viễn (do bấm hợp lệ hoặc đã bị loại), thì bỏ qua
     if(isFrozen) return; 
 
     if(status === 'press_allowed'){
-      // valid press
+      // bấm hợp lệ
       sounds.click.play().catch(()=>{});
       buzzerButton.classList.add('pulse-once');
       setTimeout(()=>buzzerButton.classList.remove('pulse-once'),900);
@@ -311,9 +311,9 @@ function setupStudent(teamInfo){
       }, 5000);
     } 
     
-    // --- BẮT ĐẦU PHẦN CHỈ ÁP DỤNG TRONG THỜI GIAN ĐẾM NGƯỢC ---
-    else if (status === 'countdown' || (!isNaN(parseInt(status)) && status !== 'waiting')) {
-      // Early press (during countdown numbers or 'countdown' phase) -> penalty logic
+    // --- BẮT ĐẦU PHẦN XỬ LÝ BẤM SỚM (CHỈ ÁP DỤNG KHI KHÔNG PHẢI press_allowed VÀ KHÔNG PHẢI waiting) ---
+    else if (status !== 'press_allowed' && status !== 'waiting') {
+      // Early press during countdown or number display
       
       localEarlyPressCount++; 
       
@@ -331,6 +331,7 @@ function setupStudent(teamInfo){
 
         setTimeout(() => {
           freezeOverlay.classList.remove('active');
+          // Cập nhật trạng thái hiển thị trở lại (chỉ cập nhật cục bộ)
           buzzerStatus.textContent = 'TRẠNG THÁI: ĐANG ĐẾM (CÓ THẺ VÀNG)';
         }, 1000); // 1-second UI flash
         
@@ -350,6 +351,6 @@ function setupStudent(teamInfo){
         buzzerButton.classList.add('disabled');
       }
     }
-    // --- KẾT THÚC PHẦN CHỈ ÁP DỤNG TRONG THỜI GIAN ĐẾM NGƯỢC ---
+    // --- KẾT THÚC PHẦN XỬ LÝ BẤM SỚM ---
   };
 }
