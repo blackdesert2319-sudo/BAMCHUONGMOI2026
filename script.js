@@ -173,8 +173,26 @@ function setupTeacher(){
     arr.forEach(p=>{
       const box = document.createElement('div');
       box.className='team-box';
-      box.textContent = `${p.team_name}\n${p.state}${p.yellow_cards? (' • Thẻ Vàng:'+p.yellow_cards): ''}`;
       box.style.background = TEAM_COLORS[p.color]?.code || '#ddd';
+
+      let statusText = '';
+      if(p.state === 'pressed') {
+        statusText = '🥇 ĐÃ BẤM!';
+        box.style.boxShadow = '0 0 18px 6px gold';
+      } else if(p.state === 'eliminated') {
+        statusText = '❌ BỊ LOẠI!';
+        box.style.background = '#333'; // Nền xám khi bị loại
+        box.style.color = '#ff6b6b';
+      } else {
+        statusText = 'CHỜ';
+      }
+
+      // HIỂN THỊ THẺ VÀNG
+      const yellowCardText = p.yellow_cards > 0 ? ` • 🟡 x${p.yellow_cards}` : '';
+      
+      box.textContent = `${p.team_name}\n${statusText}${yellowCardText}`;
+
+      // Highlight the pressed team (if any)
       if(pressed[0] && pressed[0].team_name === p.team_name){
         box.style.boxShadow = '0 0 18px 6px gold';
       }
@@ -292,27 +310,46 @@ function setupStudent(teamInfo){
           await gameRef.child('status').set('waiting');
         }
       }, 5000);
-    } else {
-      // Early press (during countdown or waiting before press_allowed) -> penalty logic
+    } 
+    
+    // --- BẮT ĐẦU PHẦN CHỈ ÁP DỤNG TRONG THỜI GIAN ĐẾM NGƯỢC ---
+    else if (status === 'countdown' || (!isNaN(parseInt(status)) && status !== 'waiting')) {
+      // Early press (during countdown numbers or 'countdown' phase) -> penalty logic
       localEarlyPressCount++;
+      
       if(localEarlyPressCount === 1){
-        // first early press -> warning + increment yellow_cards in DB
+        // Lần 1: Cảnh cáo Thẻ Vàng
         buzzerStatus.textContent = '⚠️ CẢNH CÁO - THẺ VÀNG (1)';
+        freezeOverlay.textContent = '⚠️ CẢNH CÁO - THẺ VÀNG (1)'; // Hiển thị cảnh báo trên overlay
+        freezeOverlay.classList.add('active'); 
         await playersRef.child(studentTeam).child('yellow_cards').transaction(v => (v || 0) + 1);
-        // brief visual feedback
+        
+        // Khóa nút bấm TẠM THỜI (3 giây) để ngăn spam tiếp ngay lập tức
         buzzerButton.classList.add('shake');
         setTimeout(()=>buzzerButton.classList.remove('shake'),400);
-      } else if(localEarlyPressCount >= 2){
-        // >=2 early presses -> eliminated for this round
-        await playersRef.child(studentTeam).update({ state:'eliminated' });
-        freezeOverlay.textContent = 'BỊ LOẠI! (2 lần phạm quy)';
-        freezeOverlay.classList.add('active');
-        sounds.lock.play().catch(()=>{});
+
         isFrozen = true;
+        setTimeout(() => {
+          // Mở khóa sau 3 giây, cho phép bấm lại
+          isFrozen = false;
+          freezeOverlay.classList.remove('active');
+          buzzerStatus.textContent = 'TRẠNG THÁI: ĐANG ĐẾM (CÓ THẺ VÀNG)';
+        }, 3000); // 3-second temporary lock
+        
+      } else if(localEarlyPressCount >= 2){
+        // Lần 2 trở lên: Bị Loại và Khóa Vĩnh viễn cho lượt này
+        await playersRef.child(studentTeam).update({ state:'eliminated' });
+        
+        freezeOverlay.textContent = '❌ BỊ LOẠI! (2 lần phạm quy)';
+        freezeOverlay.classList.add('active'); // Kích hoạt overlay Bị Loại
+        sounds.lock.play().catch(()=>{});
+        
+        // KHÓA VĨNH VIỄN cho lượt chơi này
+        isFrozen = true; 
         buzzerStatus.textContent = 'TRẠNG THÁI: BỊ LOẠI';
-        // disallow further clicks locally
         buzzerButton.classList.add('disabled');
       }
     }
+    // --- KẾT THÚC PHẦN CHỈ ÁP DỤNG TRONG THỜI GIAN ĐẾM NGƯỢC ---
   };
 }
