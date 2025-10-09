@@ -134,7 +134,11 @@
       transition: transform .12s, box-shadow .25s, background .25s;
       position:relative; overflow:visible;
     }
-    #buzzer-button.disabled { opacity:0.5; pointer-events:none; transform:scale(.995); }
+
+    /* IMPORTANT: .disabled is visual-only (keeps click events) */
+    #buzzer-button.disabled { opacity:0.5; transform:scale(.995); }
+    /* .no-pointer will actually block clicks (used when eliminated or totally frozen) */
+    #buzzer-button.no-pointer { pointer-events: none !important; }
 
     /* Neon glow controlled via CSS variables set in JS */
     #buzzer-button.glow {
@@ -156,23 +160,21 @@
 
     .shake { animation: shake .42s; }
     @keyframes shake {
-      0%,100%{ transform:translateX(0); } 25%{ transform:translateX(-8px);} 50%{ transform:translateX(8px);} 75%{ transform:translateX(-4px);}
+      0%,100%{ transform:translateX(0); } 25%{ transform:translateX(-8px);} 50%{ transform:translateX(8px);} 75%{ transform:translateX(-4px); }
     }
 
     /* Freeze overlay */
     #freeze-overlay {
       position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
       background:linear-gradient(180deg, rgba(4,8,16,0.72), rgba(2,4,8,0.82));
-      color:#e6fbff; 
-      /* CHỈNH SỬA: Font chữ to hơn và nổi bật hơn cho cảnh báo */
-      font-weight: 900; 
-      font-size: 1.8rem; /* TĂNG KÍCH THƯỚC CHỮ */
+      color:#e6fbff;
+      font-weight: 900;
+      font-size: 1.8rem;
       text-align: center;
       padding: 20px;
       text-shadow:
-        0 0 8px #ff6b6b, /* Bóng đỏ sắc nét */
-        0 0 16px rgba(255, 107, 107, 0.7); /* Mở rộng bóng đỏ */
-      /* HẾT CHỈNH SỬA */
+        0 0 8px #ff6b6b,
+        0 0 16px rgba(255, 107, 107, 0.7);
       border-radius:12px;
       opacity:0; pointer-events:none; transition:opacity .25s;
       z-index:6;
@@ -227,7 +229,7 @@
           <div id="team-name-display">ĐỘI CỦA BẠN</div>
           <div style="position:relative; width:100%; display:flex; justify-content:center; align-items:center;">
             <div id="freeze-overlay">ĐÃ BẤM - CHỜ KẾT QUẢ</div>
-            <button id="buzzer-button" class="disabled" aria-disabled="true">CHỜ GIÁO VIÊN</button>
+            <button id="buzzer-button" class="disabled no-pointer" aria-disabled="true">CHỜ GIÁO VIÊN</button>
           </div>
           <div id="buzzer-status" style="opacity:0.9; margin-top:6px;">TRẠNG THÁI: CHỜ</div>
         </div>
