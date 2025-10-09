@@ -173,26 +173,8 @@ function setupTeacher(){
     arr.forEach(p=>{
       const box = document.createElement('div');
       box.className='team-box';
+      box.textContent = `${p.team_name}\n${p.state}${p.yellow_cards? (' • Thẻ Vàng:'+p.yellow_cards): ''}`;
       box.style.background = TEAM_COLORS[p.color]?.code || '#ddd';
-
-      let statusText = '';
-      if(p.state === 'pressed') {
-        statusText = '🥇 ĐÃ BẤM!';
-        box.style.boxShadow = '0 0 18px 6px gold';
-      } else if(p.state === 'eliminated') {
-        statusText = '❌ BỊ LOẠI!';
-        box.style.background = '#333'; // Nền xám khi bị loại
-        box.style.color = '#ff6b6b';
-      } else {
-        statusText = 'CHỜ';
-      }
-
-      // HIỂN THỊ THẺ VÀNG
-      const yellowCardText = p.yellow_cards > 0 ? ` • 🟡 x${p.yellow_cards}` : '';
-      
-      box.textContent = `${p.team_name}\n${statusText}${yellowCardText}`;
-
-      // Highlight the pressed team (if any)
       if(pressed[0] && pressed[0].team_name === p.team_name){
         box.style.boxShadow = '0 0 18px 6px gold';
       }
@@ -285,21 +267,22 @@ function setupStudent(teamInfo){
 
   // Click handler for buzzer
   buzzerButton.onclick = async (e) => {
+    // if currently not allowed but not frozen => early press
     const statusSnapshot = await gameRef.child('status').once('value');
     const status = statusSnapshot.val();
 
-    // Nếu đã bị khóa vĩnh viễn (do bấm hợp lệ hoặc đã bị loại), thì bỏ qua
-    if(isFrozen) return; 
+    // If already frozen for this client, ignore clicks
+    if(isFrozen) return;
 
     if(status === 'press_allowed'){
-      // bấm hợp lệ
+      // valid press
       sounds.click.play().catch(()=>{});
       buzzerButton.classList.add('pulse-once');
       setTimeout(()=>buzzerButton.classList.remove('pulse-once'),900);
       const now = Date.now();
       await playersRef.child(studentTeam).update({ state:'pressed', press_time: now });
       freezeOverlay.classList.add('active');
-      isFrozen = true; // Khóa vĩnh viễn sau khi bấm hợp lệ
+      isFrozen = true;
       buzzerAllowed = false;
       buzzerStatus.textContent = 'ĐÃ BẤM - CHỜ KẾT QUẢ';
       // optionally auto reset game status after 5s by one client (teacher can also end)
@@ -309,48 +292,27 @@ function setupStudent(teamInfo){
           await gameRef.child('status').set('waiting');
         }
       }, 5000);
-    } 
-    
-    // --- BẮT ĐẦU PHẦN XỬ LÝ BẤM SỚM (CHỈ ÁP DỤNG KHI KHÔNG PHẢI press_allowed VÀ KHÔNG PHẢI waiting) ---
-    else if (status !== 'press_allowed' && status !== 'waiting') {
-      // Early press during countdown or number display
-      
-      localEarlyPressCount++; 
-      
+    } else {
+      // Early press (during countdown or waiting before press_allowed) -> penalty logic
+      localEarlyPressCount++;
       if(localEarlyPressCount === 1){
-        // Lần 1: Cảnh cáo Thẻ Vàng
+        // first early press -> warning + increment yellow_cards in DB
         buzzerStatus.textContent = '⚠️ CẢNH CÁO - THẺ VÀNG (1)';
-        freezeOverlay.textContent = '⚠️ CẢNH CÁO - THẺ VÀNG (1)'; 
-        freezeOverlay.classList.add('active'); 
-        // Cập nhật Firebase
         await playersRef.child(studentTeam).child('yellow_cards').transaction(v => (v || 0) + 1);
-        
-        // Hiển thị cảnh báo nhanh (1 giây)
+        // brief visual feedback
         buzzerButton.classList.add('shake');
         setTimeout(()=>buzzerButton.classList.remove('shake'),400);
-
-        setTimeout(() => {
-          freezeOverlay.classList.remove('active');
-          // Cập nhật trạng thái hiển thị trở lại (chỉ cập nhật cục bộ)
-          buzzerStatus.textContent = 'TRẠNG THÁI: ĐANG ĐẾM (CÓ THẺ VÀNG)';
-        }, 1000); // 1-second UI flash
-        
       } else if(localEarlyPressCount >= 2){
-        // Lần 2 trở lên: Bị Loại và Khóa Vĩnh viễn cho lượt này
-        
-        // Cập nhật Firebase
+        // >=2 early presses -> eliminated for this round
         await playersRef.child(studentTeam).update({ state:'eliminated' });
-        
-        freezeOverlay.textContent = '❌ BỊ LOẠI! (2 lần phạm quy)';
-        freezeOverlay.classList.add('active'); // Kích hoạt overlay Bị Loại
+        freezeOverlay.textContent = 'BỊ LOẠI! (2 lần phạm quy)';
+        freezeOverlay.classList.add('active');
         sounds.lock.play().catch(()=>{});
-        
-        // KHÓA VĨNH VIỄN cho lượt chơi này
-        isFrozen = true; 
+        isFrozen = true;
         buzzerStatus.textContent = 'TRẠNG THÁI: BỊ LOẠI';
+        // disallow further clicks locally
         buzzerButton.classList.add('disabled');
       }
     }
-    // --- KẾT THÚC PHẦN XỬ LÝ BẤM SỚM ---
   };
 }
