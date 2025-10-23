@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="format-detection" content="telephone=no" />
+  <title>Buzzer Neon Pro - GIÁO VIÊN & NỘI DUNG CÂU HỎI</title>
+
+  <script src="https://www.gstatic.com/firebasejs/7.19.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/7.19.1/firebase-database.js"></script>
+  
+  <script>
+      window.MathJax = {
+          tex: {
+              inlineMath: [['$', '$'], ['\\(', '\\)']] 
+          },
+          startup: {
+              typeset: false 
+          }
+      };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <style>
+    /* ===== CSS Tổng quan & nền neon động (từ Buzzer) ===== */
+    :root{
+      --bg1: #121216;
+      --bg2: #181824;
+      --accent1: #00d4ff;
+      --accent2: #9b6bff;
+      --glass: rgba(255,255,255,0.04);
+    }
+    html,body{
+      height:100%;
+      margin:0;
+      padding:0;
+      font-family: Inter, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      background: linear-gradient(180deg,var(--bg2),var(--bg1));
+      overflow:auto; 
+      touch-action: auto; 
+    }
+    .neon-bg {
+      position:fixed; inset:0; z-index:0; filter: blur(60px); opacity:0.45;
+      background: radial-gradient(30% 30% at 20% 30%, rgba(0,212,255,0.14), transparent 12%),
+        radial-gradient(25% 25% at 80% 70%, rgba(155,107,255,0.12), transparent 15%);
+      animation: bgFloat 18s linear infinite; pointer-events:none;
+    }
+    @keyframes bgFloat {
+      0% { transform: translate(0,0) scale(1); }
+      50% { transform: translate(-4%, 3%) scale(1.03); }
+      100% { transform: translate(0,0) scale(1); }
+    }
+    .app { position:relative; z-index:2; width:100%; min-height:100vh; display:flex; flex-direction: column; align-items:flex-start; /* <--- ĐỔI THÀNH flex-start */ justify-content:flex-start; padding:20px; box-sizing:border-box; }
+    .card { width:100%; max-width:1200px; border-radius:16px; padding:18px; background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02)); box-shadow: 0 8px 40px rgba(0,0,0,0.6); color:#e8eef6; position:relative; overflow:hidden; margin: 0 auto; /* <--- THÊM DÒNG NÀY ĐỂ CĂN GIỮA KHỐI CHÍNH */ }
+    h1 { margin:6px 0 0 0; font-size:1.2rem; letter-spacing:0.6px; color:#dff7ff;}
+    .sub { color: #bcdff0; font-size:0.9rem; opacity:0.9; }
+
+    /* Control & Status */
+    .teacher-controls { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-start; /* <--- ĐÃ ĐỔI THÀNH CĂN TRÁI */ margin-top:0px; }
+    .teacher-controls button { padding:10px 14px; border-radius:10px; border:none; cursor:pointer; font-weight:600; background:linear-gradient(180deg,#3b82f6,#2256d6); color:#fff; box-shadow:0 8px 24px rgba(35,82,150,0.28); }
+    .teacher-controls button:disabled { opacity: 0.6; cursor: not-allowed; }
+    #countdown-display { font-size:1.4rem; font-weight:800; color:var(--accent1); text-shadow:0 6px 18px rgba(0,212,255,0.12); }
+    #teams-status { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-top:12px; width:100%; }
+    .team-box { min-width:110px; padding:10px; border-radius:10px; text-align:center; color:#041018; font-weight:700; box-shadow: 0 4px 14px rgba(0,0,0,0.5); background:linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.75)); white-space: pre-wrap; }
+
+    /* ===== Layout Nội dung & Bảng Điểm (từ Game Tăng Tốc) ===== */
+    .main-content-layout { display: flex; gap: 20px; width: 100%; flex-wrap: wrap; margin-top: 20px; }
+    .game-container { flex: 3; min-width: 500px; background-color: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); color: #333; }
+    #score-board-container { flex: 1; min-width: 250px; padding: 20px; border-radius: 10px; background-color: #3c414d; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); }
+    
+    /* BẢNG ĐIỂM */
+    .team-score-item { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding: 10px; border-radius: 8px; font-weight: bold; color: white; transition: transform 0.2s; }
+    .team-name { font-size: 1.1em; }
+    .team-score { font-size: 1.8em; }
+    .score-control button { background: rgba(255, 255, 255, 0.2); border: none; color: white; padding: 5px 10px; margin-left: 5px; border-radius: 5px; cursor: pointer; font-size: 1em; font-weight: 900; line-height: 1; transition: background 0.2s; }
+    /* MÀU ĐỘI */
+    .team-red { background-color: #e74c3c; } .team-blue { background-color: #3498db; } .team-green { background-color: #2ecc71; }
+    .team-yellow { background-color: #f1c40f; color: #333; } .team-purple { background-color: #9b59b6; }
+    
+    /* NỘI DUNG CÂU HỎI */
+    .question-number { font-size: 1.2em; color: #2A52BE; margin-bottom: 10px; font-weight: bold; }
+    .question-text { font-size: 1.8em; margin-bottom: 20px; font-weight: 500; }
+    .options-container { display: flex; flex-direction: column; gap: 8px; }
+    .option { padding: 12px; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; font-size: 1.5em; }
+    .option:hover:not(.disabled) { background-color: #e9e9e9; border-color: #aaa; }
+    .option.correct { background-color: #d4edda; border-color: #c3e6cb; }
+    .option.incorrect { background-color: #f8d7da; border-color: #f5c6fb; }
+    .option.disabled { cursor: default; opacity: 0.6; }
+    .result-message { margin-top: 15px; font-size: 1.5em; font-weight: bold; }
+    .button-action { padding: 15px 30px; font-size: 1.5em; cursor: pointer; background-color: #5cb85c; color: white; border: none; border-radius: 8px; transition: background-color 0.2s; }
+    .button-action:hover { background-color: #4cae4c; }
+    #buzzer-message { font-size: 1.5em; font-weight: bold; color: #e74c3c; margin-bottom: 10px; }
+    
+  </style>
+</head>
+<body>
+
+  <div class="neon-bg" aria-hidden="true"></div>
+
+  <div class="app">
+    <div class="card" role="application">
+  
+      <div id="teacher-screen" style="width:100%; margin-top:12px;">
+        
+        <div style="display:flex;flex-direction:column;align-items:flex-start;width:100%; border: 1px solid var(--accent2); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+    
+    <div class="control-bar" style="display:flex; gap: 15px; flex-wrap: wrap; align-items: center; width: 100%;">
+        
+        <h2 style="color: var(--accent2); margin-top: 0; margin-bottom: 0; font-size: 1.1rem; flex-shrink: 0;"> </h2>
+        
+        <div id="result-display" style="min-height:28px;color:gold;font-weight:800;margin-bottom:0; flex-shrink: 0; font-size: 0.9rem;">Đang chờ kết nối...</div>
+        
+        <div id="countdown-display" style="margin-top:0; font-size:1.1rem; font-weight:800; color:var(--accent1); text-shadow:0 6px 18px rgba(0,212,255,0.12); flex-shrink: 0;">CHỜ LỆNH</div> 
+        
+        <div class="teacher-controls" style="margin-top:0; margin-left: auto;"> 
+            <button id="start-button">Bắt đầu lượt (Đếm ngược)</button>
+            <button id="end-round-button" style="display:none;background:#00c2a8;">Kết thúc lượt / Khóa chuông</button>
+            <button id="master-reset-button" style="background:#ff6b6b;">Reset tổng (Xóa data HS)</button>
+        </div>
+    </div>
+    
+    <div id="teams-status" style="margin-top: 10px;"></div>
+</div>
+        
+        <div class="main-content-layout">
+            
+            <div class="game-container">
+                <div id="buzzer-message">.</div>
+                
+                <button id="startButton" class="button-action" style="margin-bottom: 20px; display: none;">VÒNG 1 (Bắt Đầu Câu Hỏi)</button>
+
+                <div id="game-content" style="display: block;">
+                    <div class="question-box">
+                        <div class="question-number">Câu hỏi <span id="current-q-number">1</span>/25</div>
+                        <div class="question-text" id="question-text"></div>
+                    </div>
+
+                    <div class="options-container" id="options-container">
+                        <div class="option" data-answer="A">A. <span id="option-a"></span></div>
+                        <div class="option" data-answer="B">B. <span id="option-b"></span></div>
+                        <div class="option" data-answer="C">C. <span id="option-c"></span></div>
+                        <div class="option" data-answer="D">D. <span id="option-d"></span></div>
+                    </div>
+
+                    <div class="result-message" id="result-message"></div>
+                    <button id="nextQuestionButton" class="button-action" style="display: none; margin-top: 20px; background-color: #3498db;">Câu hỏi tiếp theo >></button>
+                </div>
+
+                <div id="final-results" style="display: none; text-align: center; margin-top: 30px; color: #333;">
+                    <h2>KẾT THÚC TRÒ CHƠI!</h2>
+                    <p style="font-size: 1.5em;">Đã hoàn thành các câu hỏi. <br> Tổng kết điểm ở bảng bên cạnh.</p>
+                    <button class="button-action" onclick="location.reload()">Chơi Lại</button>
+                </div>
+            </div>
+
+            <div id="score-board-container">
+                <h2 style="text-align: center; color: #f1c40f; margin-top: 0;">Bảng Điểm Đội</h2>
+                <div id="score-board">
+                    </div>
+            </div>
+        </div>
+
+      </div>
+      </div>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    // **********************************************
+    // DỮ LIỆU & BIẾN TRẠNG THÁI
+    // **********************************************
+    
+    // Dữ liệu câu hỏi (25 câu)
+    const questions = [
+        // 15 CÂU CƠ BẢN (A)
+        { q: 'Cho CSC ($u_n$) có $u_1 = 5$, $d = -3$. Số hạng thứ tư $u_4$ là:', options: ['4', '-4', '-12', '2'], correct: 'B' },
+        { q: 'Cho CSC ($u_n$) có $u_5 = 18$, $u_{10} = 38$. Công sai $d$ là:', options: ['2', '3', '4', '5'], correct: 'C' },
+        { q: 'Cho CSC ($u_n$) có $u_1 = 2$, $d = 3$. Tổng $S_{10}$ là:', options: ['155', '310', '150', '95'], correct: 'A' },
+        { q: 'CSC ($u_n$) được định nghĩa bởi hệ thức truy hồi nào sau đây:', options: ['$u_n = u_{n-1} + n$', '$u_n = u_{n-1} \\cdot 2$', '$u_n = u_{n-1} + 5$', '$u_n = u_1 + (n-1)d$'], correct: 'C' },
+        { q: 'Cho CSC ($u_n$) có $u_1 = 5$, $d = 2$. Để tổng $S_n = 480$, số lượng số hạng $n$ là:', options: ['15', '18', '20', '24'], correct: 'C' },
+        { q: 'Cho CSN ($u_n$) có $u_1 = -4$, $q = 3$. Số hạng thứ năm $u_5$ là:', options: ['-108', '-324', '324', '-400'], correct: 'B' },
+        { q: 'Công thức tính tổng $n$ số hạng đầu tiên của CSC ($u_n$) là:', options: ['$S_n = \\frac{n(u_1 + u_n)}{2}$', '$S_n = u_1 \\frac{1 - q^n}{1 - q}$', '$S_n = u_1 + (n-1)d$', '$S_n = n(u_1 + u_n)$'], correct: 'A' },
+        { q: 'Cho CSN ($u_n$) có $u_4 = 54$, $q = 3$. Số hạng đầu tiên $u_1$ là:', options: ['2', '6', '18', '162'], correct: 'A' },
+        { q: 'Số hạng tổng quát $u_n$ của một CSN ($n \\ge 1$) được xác định bởi công thức nào:', options: ['$u_n = u_1 + (n-1)q$', '$u_n = u_1 \\cdot q^{n-1}$', '$u_n = u_1 \\cdot q^n$', '$u_n = u_1 \\cdot q + u_{n-1}$'], correct: 'B' },
+        { q: 'Cho CSN ($u_n$) có $u_1 = 2$, $q = -3$. Tính tổng $S_4$:', options: ['-40', '122', '40', '-160'], correct: 'A' },
+        { q: 'Công thức tính tổng $n$ số hạng đầu tiên của CSC theo $u_1$ và $d$ là:', options: ['$S_n = \\frac{n}{2}[2u_1 + (n-1)d]$', '$S_n = n \\cdot u_n$', '$S_n = \\frac{n}{2}[u_1 + d]$', '$S_n = u_1 \\cdot q^{n-1}$'], correct: 'A' },
+        { q: 'Công thức tính tổng $n$ số hạng đầu tiên của CSN ($q \\ne 1$) là:', options: ['$S_n = u_1 (1 - q^n)$', '$S_n = u_1 + u_n$', '$S_n = u_1 \\frac{1 - q^n}{1 - q}$', '$S_n = \\frac{n}{2}[2u_1 + (n-1)q]$'], correct: 'C' },
+        { q: 'Cho CSC ($u_n$) có $u_1 = 10$, $S_{10} = 205$. Hãy tìm $u_{10}$:', options: ['31', '21', '41', '35'], correct: 'A' },
+        { q: 'Cho CSC ($u_n$) có $u_1 = -5$, $d = 4$. Công thức tính tổng $S_n$ là:', options: ['$S_n = n(2n - 7)$', '$S_n = n(4n - 9)$', '$S_n = 2n^2 - 5n$', '$S_n = n(4n - 10)$'], correct: 'A' },
+        { q: 'CSN ($u_n$) được định nghĩa bởi hệ thức truy hồi nào sau đây:', options: ['$u_n = u_{n-1} + 3$', '$u_n = u_{n-1} + u_{n-2}$', '$u_n = 2u_{n-1}$', '$u_n = u_1 + 2^{n-1}$'], correct: 'C' },
+
+        // 10 CÂU NHẬN DIỆN VÀ VIẾT SỐ HẠNG (B)
+        { q: 'Dãy số nào sau đây là **cấp số cộng**?', options: ['1; 2; 4; 8', '1; 3; 5; 7', '1; -1; 1; -1', '1; 4; 9; 16'], correct: 'B' },
+        { q: 'Dãy số nào sau đây là **cấp số nhân**?', options: ['2; 5; 8; 11', '10; 5; 2.5; 1.25', '1; 1; 2; 3; 5', '1; 3; 5; 7'], correct: 'B' },
+        { q: 'Cho CSC ($u_n$) có $u_1 = 10$, $d = -2$. Ba số hạng đầu tiên là:', options: ['10; 12; 14', '10; 8; 6', '10; -20; 40', '10; 5; 0'], correct: 'B' },
+        { q: 'Cho CSN ($u_n$) có $u_1 = 16$, $q = 0.5$. Ba số hạng đầu tiên là:', options: ['16; 8; 4', '16; 16.5; 17', '16; 32; 64', '16; 4; 1'], correct: 'A' },
+        { q: 'Dãy số ($u_n$) với $u_n = 3n + 1$. Số hạng $u_3$ là:', options: ['7', '10', '4', '13'], correct: 'B' },
+        { q: 'Dãy số ($u_n$) với $u_n = 2^{n+1}$. Số hạng $u_3$ là:', options: ['8', '16', '32', '10'], correct: 'B' },
+        { q: 'Dãy số 5; 5; 5; 5 là:', options: ['Chỉ là cấp số cộng', 'Chỉ là cấp số nhân', 'Vừa là CSC, vừa là CSN', 'Không phải CSC, không phải CSN'], correct: 'C' },
+        { q: 'Cho CSC ($u_n$) có $u_1 = 5$. Biết $u_3 = 11$. Công sai $d$ là:', options: ['3', '6', '5.5', '1'], correct: 'A' },
+        { q: 'Cho CSN ($u_n$) có $u_1 = 2$. Biết $u_3 = 18$ ($q > 0$). Công bội $q$ là:', options: ['9', '4', '3', '6'], correct: 'C' },
+        { q: 'Dãy số nào **không phải** CSC cũng **không phải** CSN?', options: ['2; 4; 6; 8', '2; 6; 18; 54', '1; 4; 2; 5', '10; 10; 10; 10'], correct: 'C' }
+    ];
+
+    let currentQuestionIndex = 0;
+    let currentAnsweringTeamColor = null; // Màu của đội bấm chuông (red, blue...)
+    
+    // Dữ liệu và cấu hình cho 5 đội
+    const teams = [
+        { id: 'red', name: 'Đội Đỏ', colorClass: 'team-red', score: 0 },
+        { id: 'blue', name: 'Đội Xanh Dương', colorClass: 'team-blue', score: 0 },
+        { id: 'green', name: 'Đội Xanh Lá', colorClass: 'team-green', score: 0 },
+        { id: 'yellow', name: 'Đội Vàng', colorClass: 'team-yellow', score: 0 },
+        { id: 'purple', name: 'Đội Tím', colorClass: 'team-purple', score: 0 },
+    ];
+    
+    const TEAM_COLORS_DISPLAY = {
+        red: { name: 'Đội Đỏ', code: '#ff6b6b' },
+        blue: { name: 'Đội Xanh Dương', code: '#3498db' },
+        green: { name: 'Đội Xanh Lá', code: '#2ecc71' },
+        yellow: { name: 'Đội Vàng', code: '#f1c40f' },
+        purple: { name: 'Đội Tím', code: '#9b59b6' }
+    };
+
+    // DOM Elements
+    const questionTextEl = document.getElementById('question-text');
+    const qNumberEl = document.getElementById('current-q-number');
+    const optionsContainerEl = document.getElementById('options-container');
+    const resultMessageEl = document.getElementById('result-message');
+    const finalResultsEl = document.getElementById('final-results');
+    const optionElements = optionsContainerEl.querySelectorAll('.option');
+    const scoreBoardContainerEl = document.getElementById('score-board-container');
+    const nextQuestionButton = document.getElementById('nextQuestionButton');
+    const buzzerMessageEl = document.getElementById('buzzer-message');
+
+
+    // **********************************************
+    // 1. KHỞI TẠO VÀ BẢNG ĐIỂM
+    // **********************************************
+
+    window.onload = function() {
+        showScreen('teacher');
+        // Gọi hàm khởi tạo Firebase từ script.js (đã có)
+        setupTeacher(); 
+        
+        renderScoreBoard();
+        loadQuestion(); // Tải câu hỏi đầu tiên
+        nextQuestionButton.addEventListener('click', () => {
+            resetAndNextQuestion();
+        });
+    };
+
+// GV.html (THÊM HÀM MỚI CHỈ RESET CHUÔNG)
+function resetBuzzerOnly() {
+    // 1. Reset trạng thái bấm chuông trên Firebase (đặt lại state của players về 'waiting')
+    window.resetBuzzerSession(); 
+    
+    // 2. Thiết lập trạng thái game cho phép bấm chuông ngay lập tức
+    gameRef.child('status').set('press_allowed');
+    
+    // Cập nhật giao diện Giáo viên (nếu cần)
+    const startButton = document.getElementById('start-button');
+    const endRoundButton = document.getElementById('end-round-button');
+    if (startButton && endRoundButton) {
+        startButton.style.display = 'none';
+        endRoundButton.style.display = 'inline-block';
+        document.getElementById('countdown-display').textContent = 'CHỜ BẤM';
+    }
+}
+
+    function showScreen(mode){
+        document.getElementById('teacher-screen').style.display = (mode==='teacher') ? 'block' : 'none';
+    }
+
+    // Cập nhật điểm và lưu vào Local Storage (để giữ điểm sau khi F5)
+    function updateTeamScore(teamId, delta) {
+        const team = teams.find(t => t.id === teamId);
+        if (team) {
+            team.score += delta;
+            document.getElementById(`score-${teamId}`).textContent = team.score;
+            // Cập nhật Local Storage
+            localStorage.setItem('teamScores', JSON.stringify(teams.map(t => ({ id: t.id, score: t.score }))));
+        }
+    }
+
+    function renderScoreBoard() {
+        const savedScores = JSON.parse(localStorage.getItem('teamScores'));
+        if (savedScores) {
+            savedScores.forEach(saved => {
+                const team = teams.find(t => t.id === saved.id);
+                if (team) team.score = saved.score;
+            });
+        }
+        
+        const board = document.getElementById('score-board');
+        board.innerHTML = ''; 
+        
+        teams.forEach(team => {
+            const item = document.createElement('div');
+            item.className = 'team-score-item ' + team.colorClass;
+            item.innerHTML = `
+                <div class="team-info">
+                    <div class="team-name">${team.name}</div>
+                    <div class="team-score" id="score-${team.id}">${team.score}</div>
+                </div>
+                <div class="score-control">
+                    <button onclick="updateTeamScore('${team.id}', 10)">+10</button>
+                    <button onclick="updateTeamScore('${team.id}', -5)">-5</button>
+                </div>
+            `;
+            board.appendChild(item);
+        });
+        scoreBoardContainerEl.style.display = 'block';
+    }
+    
+    // Đưa hàm updateTeamScore ra global scope để các nút HTML có thể gọi
+    window.updateTeamScore = updateTeamScore;
+
+    // **********************************************
+    // 2. LOGIC TẢI VÀ CHẤM CÂU HỎI
+    // **********************************************
+    
+    function renderMath() {
+        if (window.MathJax) {
+            MathJax.typesetPromise([questionTextEl, optionsContainerEl]);
+        }
+    }
+
+    function loadQuestion() {
+    if (currentQuestionIndex >= questions.length) {
+        endGame();
+        return;
+    }
+
+    const currentQ = questions[currentQuestionIndex];
+    
+    // Giao diện
+    nextQuestionButton.style.display = 'none';
+    resultMessageEl.textContent = 'Chờ đội bấm chuông và trả lời...';
+    resultMessageEl.style.color = '#333';
+    qNumberEl.textContent = currentQuestionIndex + 1;
+    
+    // Reset và Cấu hình nội dung cho các nút đáp án
+    optionElements.forEach((el, index) => {
+        el.classList.remove('correct', 'incorrect', 'disabled');
+        // KHÔNG XÓA EL.ONCLICK = NULL NỮA
+        el.querySelector('span').innerHTML = currentQ.options[index];
+    });
+    
+    questionTextEl.innerHTML = currentQ.q;
+    renderMath();
+
+    // *** ĐIỂM MỚI: Kích hoạt click cho các phương án ngay lập tức ***
+    // Lúc này click vào sẽ báo lỗi "Vui lòng đợi đội bấm chuông..."
+    enableAnswerChecking(); 
+}
+
+    // HÀM MỚI: Chỉ bật lại sự kiện click cho các phương án chưa được chấm (không có class incorrect/correct)
+function enableAnswerChecking() {
+    optionElements.forEach((el) => {
+        // Chỉ bật lại sự kiện click nếu đáp án đó chưa bị đánh dấu là sai (incorrect) hoặc đúng (correct)
+        if (!el.classList.contains('incorrect') && !el.classList.contains('correct')) {
+             el.classList.remove('disabled');
+             el.onclick = () => checkBuzzedAnswer(el);
+        }
+    });
+}
+    
+    function disableAnswerChecking() {
+         optionElements.forEach((el) => {
+            el.classList.add('disabled'); 
+            el.onclick = null;
+        });
+    }
+
+    // HÀM MỚI: Chỉ chạy khi có đội trả lời ĐÚNG
+function highlightAndDisableAll(correctAnswer, selectedElement) {
+    optionElements.forEach(el => {
+        el.classList.add('disabled'); 
+        el.onclick = null;
+        if (el.getAttribute('data-answer') === correctAnswer) {
+            el.classList.add('correct'); // Đánh dấu đáp án đúng
+        }
+        // Nếu là đáp án sai đã được chọn, nó đã bị đánh dấu 'incorrect' từ trước
+    });
+    // Hiển thị nút chuyển câu và reset chuông
+    nextQuestionButton.style.display = 'block'; 
+}
+
+    // HÀM MỚI: Xử lý chấm điểm theo lượt tích chọn của GV
+function checkBuzzedAnswer(selectedElement) {
+    if (!currentAnsweringTeamColor) {
+        alert("⚠️ Cảnh báo: Vui lòng đợi đội bấm chuông trước khi chấm điểm!");
+        return;
+    }
+    
+    const currentQ = questions[currentQuestionIndex];
+    const selectedAnswer = selectedElement.getAttribute('data-answer');
+    const correctAnswer = currentQ.correct;
+    const teamId = currentAnsweringTeamColor;
+    
+    if (selectedAnswer === correctAnswer) {
+        // **TRẢ LỜI ĐÚNG**
+        updateTeamScore(teamId, 10);
+        selectedElement.classList.add('correct');
+        resultMessageEl.innerHTML = `✅ **CHÍNH XÁC!** (+10 điểm cho ${TEAM_COLORS_DISPLAY[teamId].name}).`;
+        resultMessageEl.style.color = '#2ecc71'; 
+        
+        // Hiện đáp án đúng và chuẩn bị chuyển câu
+        highlightAndDisableAll(correctAnswer, selectedElement);
+        
+   // GV.html (Đoạn code ĐÃ SỬA bên trong checkBuzzedAnswer - khối else)
+    } else {
+        // **TRẢ LỜI SAI**
+        updateTeamScore(teamId, -5);
+        selectedElement.classList.add('incorrect');
+        selectedElement.classList.add('disabled');
+        selectedElement.onclick = null; // Vô hiệu hóa đáp án sai này
+        
+        // Cần reset lại trạng thái chuông để đội khác có thể bấm tiếp
+        resultMessageEl.innerHTML = `❌ **CHƯA CHÍNH XÁC!** (-5 điểm cho ${TEAM_COLORS_DISPLAY[teamId].name}). **Mời đội khác bấm chuông!**`;
+        resultMessageEl.style.color = '#e74c3c'; 
+        
+        // 1. CHỈ GỌI HÀM RESET CHUÔNG NHẸ:
+        resetBuzzerOnly(); // <-- SỬA TẠI ĐÂY
+        
+        currentAnsweringTeamColor = null; // Reset đội đang trả lời
+        
+        // 2. Bật lại cơ chế click cho các nút còn lại (enableAnswerChecking sẽ tự động bỏ qua nút 'incorrect')
+        enableAnswerChecking(); 
+    }
+}
+    
+    function endGame() {
+        document.getElementById('game-content').style.display = 'none';
+        finalResultsEl.style.display = 'block';
+    }
+
+
+    // **********************************************
+    // 3. LOGIC KẾT NỐI CHUÔNG (FIREBASE)
+    // **********************************************
+
+    // Hàm này được gọi trong script.js khi có đội bấm chuông hợp lệ đầu tiên
+    function handleFirstPress(teamId, color) {
+        currentAnsweringTeamColor = color; 
+        
+        buzzerMessageEl.style.color = TEAM_COLORS_DISPLAY[color].code;
+        
+        resultMessageEl.textContent = 'GV tích chọn đáp án mà HS lựa chọn.';
+        resultMessageEl.style.color = '#f1c40f'; // Vàng
+        
+        enableAnswerChecking(); // Bật tính năng chấm điểm bằng cách click vào đáp án
+    }
+
+    function resetAndNextQuestion() {
+        // 1. Reset trạng thái bấm chuông trên Firebase (cho phép vòng mới)
+        window.resetBuzzerSession(); 
+        
+        // 2. Chuyển sang câu hỏi tiếp theo
+        currentQuestionIndex++;
+        currentAnsweringTeamColor = null; // Reset đội đang trả lời
+        loadQuestion(); 
+        
+        buzzerMessageEl.textContent = `Sẵn sàng bấm chuông cho Câu hỏi ${currentQuestionIndex + 1}!`;
+    }
+
+  </script>
+</body>
+</html>
